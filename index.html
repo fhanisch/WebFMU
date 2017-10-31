@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="de">
+
+  <head>
+    <title>Simulation</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="index.css"/>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <!--<script type="text/javascript" src="../MathJax/MathJax.js?config=TeX-AMS_HTML"></script>-->
+    <script type="text/javascript" async
+      src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+  </head>
+
+  <body>
+
+    <header>
+      <h1>Simulation</h1>
+    </header>
+
+    <main>
+      <h2>PT2-Glied</h2>
+      <p ID="formel">
+        \begin{equation}
+        \ddot{x} = \frac{1}{c_2} (k-c_1\dot{x}-x)
+        \end{equation}
+      </p>
+
+      <div class=settings>
+        <label for="projektname">Projektname</label>
+        <input id="projektname" type="text" name="projektname" value="proj1"/>
+        <label for="tau">Tau</label>
+        <input id="tau" type="text" name="tau" value="0.01"/>
+        <input type="Submit" onclick="simulate()" value="Simulate"/>
+      </div>
+      <div id="sim"></div>
+      <p>
+        <a href="/simulation">Neu</a>
+        <a href="/simulation/data">Daten</a>
+      </p>
+    </main>
+
+    <footer>
+      <p>FH 2017</p>
+    </footer>
+
+    <script>
+      function simulate()
+      {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            document.getElementById("sim").innerHTML =
+            this.responseText;
+          }
+        };
+        var name = document.getElementById("projektname").value;
+        var tau = document.getElementById("tau").value;
+        xhttp.open("GET", "sim.php?n="+name+"&T="+tau, true);
+        xhttp.send();
+      }
+      function plot_table()
+      {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            document.getElementById("table").innerHTML =
+            this.responseText;
+          }
+        };
+        xhttp.open("GET", "demo.php", true);
+        xhttp.send();
+      }
+    </script>
+  </body>
+
+</html>

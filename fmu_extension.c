@@ -18,8 +18,9 @@ PHP_FUNCTION(my_function);
 PHP_FUNCTION(hello_long);
 PHP_FUNCTION(hello_greetme);
 PHP_FUNCTION(simulate);
+PHP_FUNCTION(plot_table);
 
-char plot_begin[] = "<div id='myDiv'><!-- Plotly chart will be drawn inside this DIV --></div>\
+char plot_begin[] = "<div id='myDiv'>plot<!-- Plotly chart will be drawn inside this DIV --></div>\
 				<script>\
 				var trace1 = {";
 char plot_end[] = "mode: 'lines',marker: {color: 'rgb(219, 64, 82)',size : 12}};\
@@ -33,10 +34,11 @@ char plot_end[] = "mode: 'lines',marker: {color: 'rgb(219, 64, 82)',size : 12}};
 // list of custom PHP functions provided by this extension
 // set {NULL, NULL, NULL} as the last record to mark the end of list
 static zend_function_entry my_functions[] = {
-    PHP_FE(my_function, NULL)
-    PHP_FE(hello_long, NULL)
-    PHP_FE(hello_greetme, NULL)
+	PHP_FE(my_function, NULL)
+	PHP_FE(hello_long, NULL)
+	PHP_FE(hello_greetme, NULL)
 	PHP_FE(simulate, NULL)
+	PHP_FE(plot_table, NULL)
     {NULL, NULL, NULL}
 };
 
@@ -76,6 +78,9 @@ fmi2FreeInstanceTYPE *fmi2FreeInstance;
 static fmi2Component fmuInstance;
 FILE *logfile;
 int isInitFMU = 0;
+double t[2000];
+double x[2000];
+int timeSteps;
 
 #define FMI_GET_FUNC_ADDR( fun )						\
 			fun = (fun##TYPE*)dlsym(handle, #fun);		\
@@ -257,9 +262,6 @@ PHP_FUNCTION(simulate)
 	sprintf(str, "%s , %s , %s%c", "Index", "Time", "Value", '\n');
 	fwrite(str, 1, strlen(str), result);
 
-	php_printf("<table>");
-	php_printf("<tr><th>Index</th> <th>Time</th>  <th>Value</th></tr>");
-
 	strcpy(xVal, "x:[");
 	strcpy(yVal, "y:[");
 
@@ -301,6 +303,8 @@ PHP_FUNCTION(simulate)
 		sprintf(str, "Error getReal!\n");
 		fwrite(str, 1, strlen(str), logfile);
 	}
+	t[i] = tComm;
+	x[i] = var[0];
 	sprintf(str, "%d , %0.3f , %0.3f%c", i, tComm, var[0], '\n');
 	fwrite(str, 1, strlen(str), result);
 
@@ -308,10 +312,6 @@ PHP_FUNCTION(simulate)
 	strcat(xVal, str);
 	sprintf(str, "%0.3f,", var[0]);
 	strcat(yVal, str);
-
-	php_printf("<tr>");
-	php_printf("<td>%d</td>  <td>%0.3f</td>  <td>%0.3f</td>", i, tComm, var[0]);
-	php_printf("</tr>");
 
 	while (tComm < tStop && status == fmi2OK)
 	{
@@ -329,6 +329,8 @@ PHP_FUNCTION(simulate)
 			sprintf(str, "Error getReal!\n");
 			fwrite(str, 1, strlen(str), logfile);
 		}
+		t[i] = tComm;
+		x[i] = var[0];
 		sprintf(str, "%d , %0.3f , %0.3f%c", i,tComm,var[0],'\n');
 		fwrite(str, 1, strlen(str), result);
 		
@@ -336,12 +338,8 @@ PHP_FUNCTION(simulate)
 		strcat(xVal, str);
 		sprintf(str, "%0.3f,", var[0]);
 		strcat(yVal, str);
-
-		php_printf("<tr>");
-		php_printf("<td>%d</td>  <td>%0.3f</td>  <td>%0.3f</td>", i, tComm, var[0]);
-		php_printf("</tr>");
 	}
-	php_printf("</table>");
+	timeSteps = i;
 
 	strcpy(xVal+strlen(xVal)-1, "],\n");
 	strcpy(yVal+strlen(yVal)-1, "],\n");
@@ -359,6 +357,25 @@ PHP_FUNCTION(simulate)
 		fmi2Reset(fmuInstance);
 		//fmi2FreeInstance(fmuInstance);
 	}
+
+	RETURN_TRUE;
+}
+
+PHP_FUNCTION(plot_table)
+{
+	int i;
+
+	php_printf("<table>");
+	php_printf("<tr><th>Time</th>  <th>Value</th></tr>");
+
+	for (i = 0; i <= timeSteps; i++)
+	{
+		php_printf("<tr>");
+		php_printf("<td>%0.3f</td>  <td>%0.3f</td>", t[i], x[i]);
+		php_printf("</tr>");
+	}
+
+	php_printf("</table>");
 
 	RETURN_TRUE;
 }
