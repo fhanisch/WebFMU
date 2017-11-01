@@ -19,21 +19,27 @@
     </header>
 
     <main>
-      <h2>PT2-Glied</h2>
+      <h2>PT2 - FMU</h2>
       <p ID="formel">
         \begin{equation}
         \ddot{x} = \frac{1}{c_2} (k-c_1\dot{x}-x)
         \end{equation}
       </p>
-
-      <div class=settings>
-        <label for="projektname">Projektname</label>
-        <input id="projektname" type="text" name="projektname" value="proj1"/>
-        <label for="tau">Tau</label>
-        <input id="tau" type="text" name="tau" value="0.01"/>
-        <input type="Submit" onclick="simulate()" value="Simulate"/>
+      <div class=mydiv>
+        <div class=settings>
+          <label for="projektname">Projektname</label>
+          <input id="projektname" type="text" name="projektname" value="proj1"/>
+          <label for="param_c1">c1</label>
+          <input id="param_c1" type="text" name="param_c1" value="0.01"/>
+        </div>
+        <div class=settings>
+          <label for="param_c2">c2</label>
+          <input id="param_c2" type="text" name="param_c2" value="0.001"/>
+          <label for="param_k">k</label>
+          <input id="param_k" type="text" name="param_k" value="1.0"/>
+        </div>
       </div>
-      <div id="myDiv"></div>
+      <button type='button' onclick="simulate()">Simulate</button>
       <div id="sim"></div>
       <p>
         <a href="/simulation">Neu</a>
@@ -53,26 +59,20 @@
           if (this.readyState == 4 && this.status == 200) {
             document.getElementById("sim").innerHTML =
             this.responseText;
+            plot_data();
           }
         };
         var name = document.getElementById("projektname").value;
-        var tau = document.getElementById("tau").value;
-        xhttp.open("GET", "sim.php?n="+name+"&T="+tau, true);
+        var param_c1 = document.getElementById("param_c1").value;
+        var param_c2 = document.getElementById("param_c2").value;
+        var param_k = document.getElementById("param_k").value;
+        xhttp.open("GET", "sim.php?n="+name+"&p1="+param_c1+"&p2="+param_c2+"&p3="+param_k, true);
         xhttp.send();
       }
-      function plot_table()
+      function plot_data()
       {
         var name = document.getElementById("projektname").value;
         makeplot("data/"+name+".txt");
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-          if (this.readyState == 4 && this.status == 200) {
-            document.getElementById("table").innerHTML =
-            this.responseText;
-          }
-        };
-        xhttp.open("GET", "demo.php", true);
-        xhttp.send();
       }
       function makeplot(resultFile) {
         Plotly.d3.csv(resultFile, function(data){ processData(data) } );
@@ -89,6 +89,7 @@
       }
 
       function makePlotly( x, y){
+        var name = document.getElementById("projektname").value;
         var traces = [{
           x: x,
           y: y,
@@ -96,11 +97,11 @@
         }];
         var layout = {
 		      height: 500,
-          title: 'PT2 - Glied',
+          title: name,
 		      xaxis: {title: 'Time [s]'},
           yaxis: {title: 'Value'}
         };
-        Plotly.newPlot('myDiv', traces,layout);
+        Plotly.newPlot('plot', traces,layout);
       };
     </script>
   </body>

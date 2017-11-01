@@ -18,7 +18,7 @@ PHP_FUNCTION(my_function);
 PHP_FUNCTION(hello_long);
 PHP_FUNCTION(hello_greetme);
 PHP_FUNCTION(simulate);
-PHP_FUNCTION(plot_table);
+//PHP_FUNCTION(plot_table);
 
 char plot_begin[] = "<div id='myDiv'>plot<!-- Plotly chart will be drawn inside this DIV --></div>\
 				<script>\
@@ -38,7 +38,7 @@ static zend_function_entry my_functions[] = {
 	PHP_FE(hello_long, NULL)
 	PHP_FE(hello_greetme, NULL)
 	PHP_FE(simulate, NULL)
-	PHP_FE(plot_table, NULL)
+	//PHP_FE(plot_table, NULL)
     {NULL, NULL, NULL}
 };
 
@@ -62,6 +62,7 @@ zend_module_entry fmu_extension_module_entry = {
 
 ZEND_GET_MODULE(fmu_extension)
 
+
 //my code
 static void *handle;
 fmi2GetVersionTYPE *fmi2GetVersion;
@@ -77,10 +78,6 @@ fmi2ResetTYPE *fmi2Reset;
 fmi2FreeInstanceTYPE *fmi2FreeInstance;
 static fmi2Component fmuInstance;
 static FILE *logfile;
-static int isInitFMU = 0;
-static double t[2000];
-static double x[2000];
-static int timeSteps=0;
 
 #define FMI_GET_FUNC_ADDR( fun )						\
 			fun = (fun##TYPE*)dlsym(handle, #fun);		\
@@ -149,7 +146,7 @@ int initFMU(fmi2String instanceName, fmi2String guid, fmi2String fmuResourcesLoc
 	}
 	strcpy(str,"FMU instanceiated.\n");
 	fwrite(str, 1, strlen(str), logfile);
-
+	
 	return 0;
 }
 
@@ -199,15 +196,14 @@ PHP_FUNCTION(simulate)
 {
 	char *name;
 	int name_len;
-	double tau;
 	int i = 0;
 	char path[] = "/var/www/html/simulation/data/";
 	char fmuPath[] = "/var/www/html/simulation/fmu/";
 	char fmuFileName[] = "DevLib_PT2.so";
 	char fmuFullFilePath[128];
 	char str[128];
-	char xVal[10000];
-	char yVal[10000];
+	//char xVal[10000];
+	//char yVal[10000];
 	FILE *result;
 
 	fmi2String instanceName = "PT1_FMU";
@@ -219,17 +215,16 @@ PHP_FUNCTION(simulate)
 	fmi2Real tComm = tStart;
 	fmi2Real tCommStep = 0.001; // FMU Exports duch OMC verwenden nur den Euler --> dort gibt es keine interne Schrittweite --> es wird nur die Kommunikationsschrittweite verwendet
 	fmi2Status status = fmi2OK;
-	fmi2Real parameter[] = { 0.01, 0.001, 1.0 };
-	fmi2ValueReference paramRefs[] = { 4, 5, 6 };
 	size_t noOfParam = 3;
-	fmi2Real var[1];
-	fmi2ValueReference varRefs[] = { 0 };
+	fmi2Real parameter[noOfParam];
+	fmi2ValueReference paramRefs[] = { 4, 5, 6 };
 	size_t noOfVars = 1;
+	fmi2Real var[noOfVars];
+	fmi2ValueReference varRefs[] = { 0 };
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sd", &name, &name_len, &tau) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sddd", &name, &name_len, &parameter[0], &parameter[1], &parameter[2]) == FAILURE) {
 		RETURN_NULL();
 	}
-	parameter[0] = tau;
 	
 	sprintf(str, "%s%s%s", path, name, ".txt");
 	result = fopen(str, "w");
@@ -239,16 +234,13 @@ PHP_FUNCTION(simulate)
 	strcpy(str, "Simulate FMU.\n");
 	fwrite(str, 1, strlen(str), logfile);
 
-	if (!isInitFMU)
+	sprintf(fmuFullFilePath, "%s%s", fmuPath, fmuFileName);
+	if (initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath) != 0)
 	{
-		sprintf(fmuFullFilePath, "%s%s", fmuPath, fmuFileName);
-		if (initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath) != 0)
-		{
-			fclose(logfile);
-			RETURN_TRUE;
-		}
+		fclose(logfile);
+		RETURN_TRUE;
 	}
-	isInitFMU = 1;
+
 	/*
 	strcpy(str, "Result File\n");
 	fwrite(str, 1, strlen(str), result);
@@ -263,8 +255,8 @@ PHP_FUNCTION(simulate)
 	sprintf(str, "%s,%s,%s%c", "index", "time", "value", '\n');
 	fwrite(str, 1, strlen(str), result);
 
-	strcpy(xVal, "x:[");
-	strcpy(yVal, "y:[");
+	//strcpy(xVal, "x:[");
+	//strcpy(yVal, "y:[");
 
 	if (fmi2SetupExperiment(fmuInstance, fmi2True, tolerance, tStart, fmi2False, tStop) != fmi2OK)
 	{
@@ -304,16 +296,14 @@ PHP_FUNCTION(simulate)
 		sprintf(str, "Error getReal!\n");
 		fwrite(str, 1, strlen(str), logfile);
 	}
-	t[i] = tComm;
-	x[i] = var[0];
 	sprintf(str, "%d,%0.3f,%0.3f%c", i, tComm, var[0], '\n');
 	fwrite(str, 1, strlen(str), result);
-
+	/*
 	sprintf(str, "%0.3f,", tComm);
 	strcat(xVal, str);
 	sprintf(str, "%0.3f,", var[0]);
 	strcat(yVal, str);
-
+	*/
 	while (tComm < tStop && status == fmi2OK)
 	{
 		status = fmi2DoStep(fmuInstance, tComm, tCommStep, fmi2True);
@@ -330,41 +320,62 @@ PHP_FUNCTION(simulate)
 			sprintf(str, "Error getReal!\n");
 			fwrite(str, 1, strlen(str), logfile);
 		}
-		t[i] = tComm;
-		x[i] = var[0];
 		sprintf(str, "%d,%0.3f,%0.3f%c", i,tComm,var[0],'\n');
 		fwrite(str, 1, strlen(str), result);
-		
+		/*
 		sprintf(str, "%0.3f,", tComm);
 		strcat(xVal, str);
 		sprintf(str, "%0.3f,", var[0]);
 		strcat(yVal, str);
+		*/
 	}
-	timeSteps = i;
-
+	
+	/*
 	strcpy(xVal+strlen(xVal)-1, "],\n");
 	strcpy(yVal+strlen(yVal)-1, "],\n");
-
 	php_printf("%s", plot_begin);
 	php_printf("%s", xVal);
 	php_printf("%s", yVal);
 	php_printf("%s", plot_end);
-	fclose(result);
-	fclose(logfile);
+	*/
+
+	php_printf("<table>");
+	php_printf("<tr><td>%s</td><td>%s</td></tr>", "Projektname", name);
+	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "c1", parameter[0]);
+	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "c2", parameter[1]);
+	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "k", parameter[2]);
+	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "t_end", tComm);
+	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "value_end", var[0]);
+	php_printf("</table>");
 
 	if (status == fmi2OK)
 	{
 		fmi2Terminate(fmuInstance);
 		fmi2Reset(fmuInstance);
-		//fmi2FreeInstance(fmuInstance);
+		fmi2FreeInstance(fmuInstance);
 	}
+
+	strcpy(str, "Simulation succesfully terminated.\n");
+	fwrite(str, 1, strlen(str), logfile);
+	fclose(result);
+	fclose(logfile);
 
 	RETURN_TRUE;
 }
 
+/*
 PHP_FUNCTION(plot_table)
 {
 	int i;
+	char str[128];
+	FILE *log_table;
+	char path[] = "/var/www/html/simulation/data/";
+
+	sprintf(str, "%s%s%s", path, "log_table", ".txt");
+	log_table = fopen(str, "w");
+
+	sprintf(str, "TimeSteps: %d", timeSteps);
+	fwrite(str, 1, strlen(str), log_table);
 
 	php_printf("<table>");
 	php_printf("<tr><th>Time</th>  <th>Value</th></tr>");
@@ -378,5 +389,8 @@ PHP_FUNCTION(plot_table)
 
 	php_printf("</table>");
 
+	fclose(log_table);
+
 	RETURN_TRUE;
 }
+*/

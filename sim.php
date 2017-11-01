@@ -1,9 +1,9 @@
 <?php
   $name = $_GET["n"];
-  $tau = $_GET["T"];
-  echo "huhu";
-  simulate($name, $tau);
-  echo "<button type='button' onclick='plot_table()'>Show Table</button>";
-  echo "<div id='table'></div>";
-  echo my_function();
+  $p1 = $_GET["p1"];
+  $p2 = $_GET["p2"];
+  $p3 = $_GET["p3"];
+  simulate($name, $p1, $p2, $p3);
+  echo "<p> Simulation succesfully terminated.</p>";
+  echo "<div id='plot'></div>";
 ?>

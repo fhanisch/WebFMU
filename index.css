@@ -68,22 +68,29 @@ footer {
 }
 
 table {
-    border-collapse: collapse;
+		border-collapse: collapse;
 		color: blue;
-    width: 100%;
+    width: 25%;
 }
 
 th, td {
+		border: 1px solid #ddd;
     text-align: left;
-    padding: 8px;
+    padding: 10px;
 }
 
 tr:nth-child(even){background-color: #f2f2f2}
+tr:hover {background-color: #ddd}
 
 .settings {
-	width: 20%;
+	width: 50%;
 	font-size: 16px;
 	color: #2e8b57;
+}
+
+.mydiv {
+	column-count: 2;
+	width: 50%;
 }
 
 input[type=text], select {
@@ -114,7 +121,8 @@ input[type=submit]:hover {
 }
 
 button {
-    background-color: #1413f6;
+		width: 25%;
+    background-color: #f44336;
     color: white;
     padding: 14px 20px;
     margin: 8px 0;
@@ -125,6 +133,6 @@ button {
 }
 
 button:hover {
-    background-color: #5453f6;
+    background-color: #e44336;
 		font-size: 20px;
 }
