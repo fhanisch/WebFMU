@@ -33,6 +33,7 @@
         <input id="tau" type="text" name="tau" value="0.01"/>
         <input type="Submit" onclick="simulate()" value="Simulate"/>
       </div>
+      <div id="myDiv"></div>
       <div id="sim"></div>
       <p>
         <a href="/simulation">Neu</a>
@@ -61,6 +62,8 @@
       }
       function plot_table()
       {
+        var name = document.getElementById("projektname").value;
+        makeplot("data/"+name+".txt");
         var xhttp = new XMLHttpRequest();
         xhttp.onreadystatechange = function() {
           if (this.readyState == 4 && this.status == 200) {
@@ -71,6 +74,34 @@
         xhttp.open("GET", "demo.php", true);
         xhttp.send();
       }
+      function makeplot(resultFile) {
+        Plotly.d3.csv(resultFile, function(data){ processData(data) } );
+      };
+
+      function processData(allRows) {
+        var x = [], y = [];
+        for (var i=0; i<allRows.length; i++) {
+            row = allRows[i];
+            x.push( row['time'] );
+            y.push( row['value'] );
+        }
+        makePlotly( x, y);
+      }
+
+      function makePlotly( x, y){
+        var traces = [{
+          x: x,
+          y: y,
+          mode: 'lines',marker: {color: 'rgb(219, 64, 82)',size : 12}
+        }];
+        var layout = {
+		      height: 500,
+          title: 'PT2 - Glied',
+		      xaxis: {title: 'Time [s]'},
+          yaxis: {title: 'Value'}
+        };
+        Plotly.newPlot('myDiv', traces,layout);
+      };
     </script>
   </body>
 

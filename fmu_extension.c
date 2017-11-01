@@ -63,7 +63,7 @@ zend_module_entry fmu_extension_module_entry = {
 ZEND_GET_MODULE(fmu_extension)
 
 //my code
-void *handle;
+static void *handle;
 fmi2GetVersionTYPE *fmi2GetVersion;
 fmi2InstantiateTYPE *fmi2Instantiate;
 fmi2SetupExperimentTYPE *fmi2SetupExperiment;
@@ -76,11 +76,11 @@ fmi2TerminateTYPE *fmi2Terminate;
 fmi2ResetTYPE *fmi2Reset;
 fmi2FreeInstanceTYPE *fmi2FreeInstance;
 static fmi2Component fmuInstance;
-FILE *logfile;
-int isInitFMU = 0;
-double t[2000];
-double x[2000];
-int timeSteps;
+static FILE *logfile;
+static int isInitFMU = 0;
+static double t[2000];
+static double x[2000];
+static int timeSteps=0;
 
 #define FMI_GET_FUNC_ADDR( fun )						\
 			fun = (fun##TYPE*)dlsym(handle, #fun);		\
@@ -249,7 +249,7 @@ PHP_FUNCTION(simulate)
 		}
 	}
 	isInitFMU = 1;
-
+	/*
 	strcpy(str, "Result File\n");
 	fwrite(str, 1, strlen(str), result);
 	strcpy(str, "Projektname: ");
@@ -259,7 +259,8 @@ PHP_FUNCTION(simulate)
 
 	sprintf(str, "%s%.3f%c", "Parameter T: ", tau, '\n');
 	fwrite(str, 1, strlen(str), result);
-	sprintf(str, "%s , %s , %s%c", "Index", "Time", "Value", '\n');
+	*/
+	sprintf(str, "%s,%s,%s%c", "index", "time", "value", '\n');
 	fwrite(str, 1, strlen(str), result);
 
 	strcpy(xVal, "x:[");
@@ -305,7 +306,7 @@ PHP_FUNCTION(simulate)
 	}
 	t[i] = tComm;
 	x[i] = var[0];
-	sprintf(str, "%d , %0.3f , %0.3f%c", i, tComm, var[0], '\n');
+	sprintf(str, "%d,%0.3f,%0.3f%c", i, tComm, var[0], '\n');
 	fwrite(str, 1, strlen(str), result);
 
 	sprintf(str, "%0.3f,", tComm);
@@ -331,7 +332,7 @@ PHP_FUNCTION(simulate)
 		}
 		t[i] = tComm;
 		x[i] = var[0];
-		sprintf(str, "%d , %0.3f , %0.3f%c", i,tComm,var[0],'\n');
+		sprintf(str, "%d,%0.3f,%0.3f%c", i,tComm,var[0],'\n');
 		fwrite(str, 1, strlen(str), result);
 		
 		sprintf(str, "%0.3f,", tComm);
