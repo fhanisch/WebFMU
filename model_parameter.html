@@ -24,10 +24,16 @@
         x = xmlDoc.getElementsByTagName("ScalarVariable");
         for (i=0;i<x.length;i++)
         {
+          if (i==0)
+          {
+            txt+="<tr>";
+            for (j=0;j<x[i].attributes.length;j++) txt+="<th>"+x[i].attributes[j].nodeName + "</th>";
+            txt+="</tr>";
+          }
           txt+="<tr>";
           for (j=0;j<x[i].attributes.length;j++)
           {
-            txt+="<td>"+x[i].attributes[j].nodeName+": "+x[i].attributes[j].nodeValue + "</td>";
+            txt+="<td>"+x[i].attributes[j].nodeValue + "</td>";
           }
           //txt+="<td>"+x[i].attributes.getNamedItem("name").nodeValue + "</td>";
           txt+="</tr>";
