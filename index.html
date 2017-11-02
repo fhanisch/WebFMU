@@ -44,6 +44,8 @@
       <p>
         <a href="/simulation">Neu</a>
         <a href="/simulation/data">Daten</a>
+        <a href="model_parameter.html">Model Paramter</a>
+        <a href="fmu/modelDescription.xml">ModelDescription</a>
       </p>
     </main>
 
@@ -66,17 +68,20 @@
         var param_c1 = document.getElementById("param_c1").value;
         var param_c2 = document.getElementById("param_c2").value;
         var param_k = document.getElementById("param_k").value;
+
         xhttp.open("GET", "sim.php?n="+name+"&p1="+param_c1+"&p2="+param_c2+"&p3="+param_k, true);
         xhttp.send();
       }
+
       function plot_data()
       {
         var name = document.getElementById("projektname").value;
         makeplot("data/"+name+".txt");
       }
+
       function makeplot(resultFile) {
         Plotly.d3.csv(resultFile, function(data){ processData(data) } );
-      };
+      }
 
       function processData(allRows) {
         var x = [], y = [];
@@ -102,7 +107,7 @@
           yaxis: {title: 'Value'}
         };
         Plotly.newPlot('plot', traces,layout);
-      };
+      }
     </script>
   </body>
 
