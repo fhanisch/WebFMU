@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <title>Simulation</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="style.css"/>
+</head>
+  <body>
+    <div id="parameter"></div>
+    <div id="sim"></div>
+    <script>
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+            myFunction(this);
+        }
+    };
+    xhttp.open("GET", "/simulation/fmu/modelDescription.xml", true);
+    xhttp.send();
+
+    function myFunction(xml) {
+      var x, xmlDoc;
+      var txt = "";
+      var varCount=0;
+      var paramCount=0;
+      xmlDoc = xml.responseXML;
+      x = xmlDoc.getElementsByTagName("ScalarVariable");
+      for (i=0;i<x.length;i++)
+      {
+        var name = x[i].attributes.getNamedItem("name").nodeValue;
+        var valueReference = x[i].attributes.getNamedItem("valueReference").nodeValue;
+        var causality = x[i].attributes.getNamedItem("causality").nodeValue;
+        var value = 0;
+        if (causality=="parameter")
+        {
+          paramCount++;
+          txt+="<label for='" + name + "'>" + name + "</label>";
+          txt+="<input id='param" + i + "' type='text' name='" + name + "" + "' valueReference='" + valueReference + "' value='" + value + "'/>";
+        }
+      }
+      txt+="<div id='paramCount' value='" + paramCount  +"'/>"
+      txt+="<button type='button' onclick='simulate()'>Simulate</button>";
+      document.getElementById("parameter").innerHTML = txt;
+    }
+    function simulate()
+    {
+      var paramCount = document.getElementById("paramCount").getAttribute("value");
+      var paramName = document.getElementById("param5").getAttribute("name");
+      var paramValueReference = document.getElementById("param5").getAttribute("valueReference");
+      document.getElementById("sim").innerHTML = paramCount + "<br>" + paramName+": "+ paramValueReference;
+    }
+    </script>
+  </body>
+
+</html>
