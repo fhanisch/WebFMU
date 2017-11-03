@@ -4,7 +4,7 @@
   <head>
     <title>Simulation</title>
     <meta charset="utf-8">
-    <link rel="stylesheet" href="index.css"/>
+    <link rel="stylesheet" href="style.css"/>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <!--<script type="text/javascript" src="../MathJax/MathJax.js?config=TeX-AMS_HTML"></script>-->
     <script type="text/javascript" async
@@ -42,10 +42,10 @@
       <button type='button' onclick="simulate()">Simulate</button>
       <div id="sim"></div>
       <p>
-        <a href="/simulation">Neu</a>
+        <a href=".">Neu</a>
         <a href="/simulation/data">Daten</a>
         <a href="model_parameter.html">Model Paramter</a>
-        <a href="fmu/modelDescription.xml">ModelDescription</a>
+        <a href="/simulation/fmu/modelDescription.xml">ModelDescription</a>
       </p>
     </main>
 
@@ -76,7 +76,7 @@
       function plot_data()
       {
         var name = document.getElementById("projektname").value;
-        makeplot("data/"+name+".txt");
+        makeplot("/simulation/data/"+name+".txt");
       }
 
       function makeplot(resultFile) {
