@@ -4,6 +4,7 @@
 #include "php.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dlfcn.h>
 #include "fmi2FunctionTypes.h"
 
@@ -18,7 +19,7 @@ PHP_FUNCTION(my_function);
 PHP_FUNCTION(hello_long);
 PHP_FUNCTION(hello_greetme);
 PHP_FUNCTION(simulate);
-//PHP_FUNCTION(plot_table);
+PHP_FUNCTION(testArray);
 
 char plot_begin[] = "<div id='myDiv'>plot<!-- Plotly chart will be drawn inside this DIV --></div>\
 				<script>\
@@ -38,7 +39,7 @@ static zend_function_entry my_functions[] = {
 	PHP_FE(hello_long, NULL)
 	PHP_FE(hello_greetme, NULL)
 	PHP_FE(simulate, NULL)
-	//PHP_FE(plot_table, NULL)
+	PHP_FE(testArray, NULL)
     {NULL, NULL, NULL}
 };
 
@@ -206,6 +207,10 @@ PHP_FUNCTION(simulate)
 	//char yVal[10000];
 	FILE *result;
 
+	zval *arrParam, *arrParamRefs, *arrParamNames, **data;
+	HashTable *arr_hash;
+	HashPosition pointer;
+
 	fmi2String instanceName = "PT1_FMU";
 	fmi2String guid = "{8c4e810f-3df3-4a00-8276-176fa3c9f9e0}";
 	fmi2String fmuResourcesLocation = NULL;
@@ -215,17 +220,57 @@ PHP_FUNCTION(simulate)
 	fmi2Real tComm = tStart;
 	fmi2Real tCommStep = 0.001; // FMU Exports duch OMC verwenden nur den Euler --> dort gibt es keine interne Schrittweite --> es wird nur die Kommunikationsschrittweite verwendet
 	fmi2Status status = fmi2OK;
-	size_t noOfParam = 3;
-	fmi2Real parameter[noOfParam];
-	fmi2ValueReference paramRefs[] = { 4, 5, 6 };
+	size_t noOfParam;
+	fmi2Real *parameter;
+	fmi2ValueReference *paramRefs;
+	fmi2String *paramNames;
 	size_t noOfVars = 1;
 	fmi2Real var[noOfVars];
 	fmi2ValueReference varRefs[] = { 0 };
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sddd", &name, &name_len, &parameter[0], &parameter[1], &parameter[2]) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "saaa", &name, &name_len, &arrParamRefs, &arrParam, &arrParamNames) == FAILURE) {
 		RETURN_NULL();
 	}
-	
+
+	arr_hash = Z_ARRVAL_P(arrParamRefs);
+	noOfParam = zend_hash_num_elements(arr_hash);
+	paramRefs = malloc(noOfParam * sizeof(double));
+	i = 0;
+	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer))
+	{
+		if (Z_TYPE_PP(data) == IS_STRING) {
+			sscanf(Z_STRVAL_PP(data), "%u", &paramRefs[i]);
+		}
+		i++;
+	}
+
+	arr_hash = Z_ARRVAL_P(arrParam);
+	noOfParam = zend_hash_num_elements(arr_hash);
+	parameter = malloc(noOfParam * sizeof(double));
+	i = 0;
+	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer))
+	{
+		if (Z_TYPE_PP(data) == IS_STRING) {
+			sscanf(Z_STRVAL_PP(data), "%lf", &parameter[i]);
+		}
+		i++;
+	}
+
+	arr_hash = Z_ARRVAL_P(arrParamNames);
+	noOfParam = zend_hash_num_elements(arr_hash);
+	paramNames = malloc(noOfParam * sizeof(char*));
+	i = 0;
+	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer))
+	{
+		if (Z_TYPE_PP(data) == IS_STRING) {
+			paramNames[i] = malloc(strlen(Z_STRVAL_PP(data)) + 1);
+			strcpy((char*)paramNames[i], Z_STRVAL_PP(data));
+		}
+		i++;
+	}
+
+	i = 0;
+
 	sprintf(str, "%s%s%s", path, name, ".txt");
 	result = fopen(str, "w");
 	sprintf(str, "%s%s%s", path, "log", ".txt");
@@ -341,9 +386,10 @@ PHP_FUNCTION(simulate)
 
 	php_printf("<table>");
 	php_printf("<tr><td>%s</td><td>%s</td></tr>", "Projektname", name);
-	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "c1", parameter[0]);
-	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "c2", parameter[1]);
-	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "k", parameter[2]);
+	for (i = 0; i < noOfParam; i++)
+	{
+		php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", paramNames[i], parameter[i]);
+	}
 	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "t_end", tComm);
 	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "value_end", var[0]);
 	php_printf("</table>");
@@ -353,6 +399,8 @@ PHP_FUNCTION(simulate)
 		fmi2Terminate(fmuInstance);
 		fmi2Reset(fmuInstance);
 		fmi2FreeInstance(fmuInstance);
+		free(parameter);
+		free(paramRefs);
 	}
 
 	strcpy(str, "Simulation succesfully terminated.\n");
@@ -363,34 +411,43 @@ PHP_FUNCTION(simulate)
 	RETURN_TRUE;
 }
 
-/*
-PHP_FUNCTION(plot_table)
+PHP_FUNCTION(testArray)
 {
+	zval *arr, *arr2, **data;
+	HashTable *arr_hash;
+	HashPosition pointer;
+	int array_count;
+	double *d;
 	int i;
-	char str[128];
-	FILE *log_table;
-	char path[] = "/var/www/html/simulation/data/";
 
-	sprintf(str, "%s%s%s", path, "log_table", ".txt");
-	log_table = fopen(str, "w");
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "aa", &arr, &arr2) == FAILURE) {
+		RETURN_NULL();
+	}
+	arr_hash = Z_ARRVAL_P(arr);
+	array_count = zend_hash_num_elements(arr_hash);
+	php_printf("The array passed contains %d elements<br>", array_count);
 
-	sprintf(str, "TimeSteps: %d", timeSteps);
-	fwrite(str, 1, strlen(str), log_table);
-
-	php_printf("<table>");
-	php_printf("<tr><th>Time</th>  <th>Value</th></tr>");
-
-	for (i = 0; i <= timeSteps; i++)
+	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer))
 	{
-		php_printf("<tr>");
-		php_printf("<td>%0.3f</td>  <td>%0.3f</td>", t[i], x[i]);
-		php_printf("</tr>");
+		if (Z_TYPE_PP(data) == IS_STRING) {
+			php_printf("%s<br>", Z_STRVAL_PP(data));
+		}
 	}
 
-	php_printf("</table>");
-
-	fclose(log_table);
+	arr_hash = Z_ARRVAL_P(arr2);
+	array_count = zend_hash_num_elements(arr_hash);
+	php_printf("The array passed contains %d elements<br>", array_count);
+	d = malloc(array_count * sizeof(double));
+	i = 0;
+	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer))
+	{
+		if (Z_TYPE_PP(data) == IS_STRING) {
+			php_printf("%s<br>", Z_STRVAL_PP(data));
+			sscanf(Z_STRVAL_PP(data), "%lf", &d[i]);
+			php_printf("%0.3f<br>", d[i]);
+		}
+		i++;
+	}
 
 	RETURN_TRUE;
 }
-*/

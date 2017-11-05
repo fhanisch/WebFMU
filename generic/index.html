@@ -20,9 +20,7 @@
 
     function myFunction(xml) {
       var x, xmlDoc;
-      var txt = "";
-      var varCount=0;
-      var paramCount=0;
+      var txt = "<table id='variationParameter'>";
       xmlDoc = xml.responseXML;
       x = xmlDoc.getElementsByTagName("ScalarVariable");
       for (i=0;i<x.length;i++)
@@ -30,24 +28,45 @@
         var name = x[i].attributes.getNamedItem("name").nodeValue;
         var valueReference = x[i].attributes.getNamedItem("valueReference").nodeValue;
         var causality = x[i].attributes.getNamedItem("causality").nodeValue;
-        var value = 0;
         if (causality=="parameter")
         {
-          paramCount++;
-          txt+="<label for='" + name + "'>" + name + "</label>";
-          txt+="<input id='param" + i + "' type='text' name='" + name + "" + "' valueReference='" + valueReference + "' value='" + value + "'/>";
+          var value = x[i].childNodes[1].attributes[0].nodeValue;
+          txt+="<tr>";
+          txt+="<td><label for='" + name + "'>" + name + "</label></td>";
+          txt+="<td><input id='param" + i + "' type='text' name='" + name + "" + "' valueReference='" + valueReference + "' value='" + value + "'/></td>";
+          txt+="</tr>";
         }
       }
-      txt+="<div id='paramCount' value='" + paramCount  +"'/>"
+      txt+="</table>";
       txt+="<button type='button' onclick='simulate()'>Simulate</button>";
       document.getElementById("parameter").innerHTML = txt;
     }
     function simulate()
     {
-      var paramCount = document.getElementById("paramCount").getAttribute("value");
-      var paramName = document.getElementById("param5").getAttribute("name");
-      var paramValueReference = document.getElementById("param5").getAttribute("valueReference");
-      document.getElementById("sim").innerHTML = paramCount + "<br>" + paramName+": "+ paramValueReference;
+      var xhttp = new XMLHttpRequest();
+      xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("sim").innerHTML = this.responseText;
+        }
+      };
+
+      var parameterlist = "";
+      var variationParameter = document.getElementById("variationParameter");
+      var parameter = variationParameter.getElementsByTagName("input");
+
+      for (i=0;i<parameter.length;i++)
+      {
+        if(i>0) parameterlist+="&";
+        parameterlist+="pref"+i+"=";
+        parameterlist+=parameter[i].getAttribute("valueReference");
+        parameterlist+="&";
+        parameterlist+="pval"+i+"=";
+        parameterlist+=parameter[i].value;
+      }
+
+      xhttp.open("POST", "sim.php", true);
+      xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+      xhttp.send(parameterlist);
     }
     </script>
   </body>
