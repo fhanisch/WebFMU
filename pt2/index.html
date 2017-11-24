@@ -64,14 +64,19 @@
           var name = x[i].attributes.getNamedItem("name").nodeValue;
           var valueReference = x[i].attributes.getNamedItem("valueReference").nodeValue;
           var causality = x[i].attributes.getNamedItem("causality").nodeValue;
+          txt+="<tr>";
+          txt+="<td><label for='" + name + "'>" + name + "</label></td>";
           if (causality=="parameter")
           {
             var value = x[i].childNodes[1].attributes[0].nodeValue;
-            txt+="<tr>";
-            txt+="<td><label for='" + name + "'>" + name + "</label></td>";
-            txt+="<td><input id='param" + i + "' type='text' name='" + name + "" + "' valueReference='" + valueReference + "' value='" + value + "'/></td>";
-            txt+="</tr>";
+            txt+="<td><input class = 'parameter' id='param" + i + "' type='text' name='" + name + "' valueReference='" + valueReference + "' value='" + value + "' index = '" + i + "'/></td>";
           }
+          else
+          {
+            txt+="<td></td>";
+          }
+          txt+="<td><input id='check" + i + "' type='checkbox'></td>";
+          txt+="</tr>";
         }
         txt+="</table>";
         document.getElementById("parameterTable").innerHTML = txt;
@@ -98,18 +103,23 @@
             parameterlist+="projname=";
             parameterlist+=parameter[i].value;
           }
-          else
+          else if (parameter[i].getAttribute("class")=="parameter")
           {
-            if(i>0) parameterlist+="&";
-            parameterlist+="pname"+j+"=";
-            parameterlist+=parameter[i].getAttribute("name");
-            parameterlist+="&";
-            parameterlist+="pref"+j+"=";
-            parameterlist+=parameter[i].getAttribute("valueReference");
-            parameterlist+="&";
-            parameterlist+="pval"+j+"=";
-            parameterlist+=parameter[i].value;
-            j++;
+            var index = parameter[i].getAttribute("index");
+            var isChecked = document.getElementById("check"+index).checked;
+            if (isChecked)
+            {
+              if(i>0) parameterlist+="&";
+              parameterlist+="pname"+j+"=";
+              parameterlist+=parameter[i].getAttribute("name");
+              parameterlist+="&";
+              parameterlist+="pref"+j+"=";
+              parameterlist+=parameter[i].getAttribute("valueReference");
+              parameterlist+="&";
+              parameterlist+="pval"+j+"=";
+              parameterlist+=parameter[i].value;
+              j++;
+            }
           }
         }
 
