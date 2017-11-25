@@ -198,6 +198,7 @@ PHP_FUNCTION(simulate)
 	char *name;
 	int name_len;
 	int i = 0;
+	int j;
 	char path[] = "/var/www/html/simulation/data/";
 	char fmuPath[] = "/var/www/html/simulation/fmu/";
 	char fmuFileName[] = "DevLib_PT2.so";
@@ -207,7 +208,7 @@ PHP_FUNCTION(simulate)
 	//char yVal[10000];
 	FILE *result;
 
-	zval *arrParam, *arrParamRefs, *arrParamNames, **data;
+	zval *arrParam, *arrParamRefs, *arrParamNames, *arrVarRefs, *arrVarNames, **data;
 	HashTable *arr_hash;
 	HashPosition pointer;
 
@@ -224,17 +225,18 @@ PHP_FUNCTION(simulate)
 	fmi2Real *parameter;
 	fmi2ValueReference *paramRefs;
 	fmi2String *paramNames;
-	size_t noOfVars = 1;
-	fmi2Real var[noOfVars];
-	fmi2ValueReference varRefs[] = { 0 };
+	size_t noOfVars;
+	fmi2Real *var;
+	fmi2ValueReference *varRefs;
+	fmi2String *varNames;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "saaa", &name, &name_len, &arrParamRefs, &arrParam, &arrParamNames) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "saaaaa", &name, &name_len, &arrParamRefs, &arrParam, &arrParamNames, &arrVarRefs, &arrVarNames) == FAILURE) {
 		RETURN_NULL();
 	}
 
 	arr_hash = Z_ARRVAL_P(arrParamRefs);
 	noOfParam = zend_hash_num_elements(arr_hash);
-	paramRefs = malloc(noOfParam * sizeof(double));
+	paramRefs = malloc(noOfParam * sizeof(long));
 	i = 0;
 	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer))
 	{
@@ -269,6 +271,32 @@ PHP_FUNCTION(simulate)
 		i++;
 	}
 
+	arr_hash = Z_ARRVAL_P(arrVarRefs);
+	noOfVars = zend_hash_num_elements(arr_hash);
+	varRefs = malloc(noOfVars * sizeof(long));
+	var = malloc(noOfVars * sizeof(double));
+	i = 0;
+	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer))
+	{
+		if (Z_TYPE_PP(data) == IS_STRING) {
+			sscanf(Z_STRVAL_PP(data), "%u", &varRefs[i]);
+		}
+		i++;
+	}
+
+	arr_hash = Z_ARRVAL_P(arrVarNames);
+	noOfVars = zend_hash_num_elements(arr_hash);
+	varNames = malloc(noOfVars * sizeof(char*));
+	i = 0;
+	for (zend_hash_internal_pointer_reset_ex(arr_hash, &pointer); zend_hash_get_current_data_ex(arr_hash, (void**)&data, &pointer) == SUCCESS; zend_hash_move_forward_ex(arr_hash, &pointer))
+	{
+		if (Z_TYPE_PP(data) == IS_STRING) {
+			varNames[i] = malloc(strlen(Z_STRVAL_PP(data)) + 1);
+			strcpy((char*)varNames[i], Z_STRVAL_PP(data));
+		}
+		i++;
+	}
+
 	i = 0;
 
 	sprintf(str, "%s%s%s", path, name, ".txt");
@@ -297,8 +325,14 @@ PHP_FUNCTION(simulate)
 	sprintf(str, "%s%.3f%c", "Parameter T: ", tau, '\n');
 	fwrite(str, 1, strlen(str), result);
 	*/
-	sprintf(str, "%s,%s,%s%c", "index", "time", "value", '\n');
+	sprintf(str, "%s,%s", "index", "time");
 	fwrite(str, 1, strlen(str), result);
+	for (j = 0; j < noOfVars; j++)
+	{
+		sprintf(str, ",%s", varNames[j]);
+		fwrite(str, 1, strlen(str), result);
+	}
+	fwrite("\n", 1, 1, result);
 
 	//strcpy(xVal, "x:[");
 	//strcpy(yVal, "y:[");
@@ -341,8 +375,15 @@ PHP_FUNCTION(simulate)
 		sprintf(str, "Error getReal!\n");
 		fwrite(str, 1, strlen(str), logfile);
 	}
-	sprintf(str, "%d,%0.3f,%0.3f%c", i, tComm, var[0], '\n');
+	sprintf(str, "%d,%0.3f", i, tComm);
 	fwrite(str, 1, strlen(str), result);
+	for (j = 0; j < noOfVars; j++)
+	{
+		sprintf(str, ",%0.3f", var[j]);
+		fwrite(str, 1, strlen(str), result);
+	}
+	fwrite("\n", 1, 1, result);
+
 	/*
 	sprintf(str, "%0.3f,", tComm);
 	strcat(xVal, str);
@@ -365,8 +406,14 @@ PHP_FUNCTION(simulate)
 			sprintf(str, "Error getReal!\n");
 			fwrite(str, 1, strlen(str), logfile);
 		}
-		sprintf(str, "%d,%0.3f,%0.3f%c", i,tComm,var[0],'\n');
+		sprintf(str, "%d,%0.3f", i, tComm);
 		fwrite(str, 1, strlen(str), result);
+		for (j = 0; j < noOfVars; j++)
+		{
+			sprintf(str, ",%0.3f", var[j]);
+			fwrite(str, 1, strlen(str), result);
+		}
+		fwrite("\n", 1, 1, result);
 		/*
 		sprintf(str, "%0.3f,", tComm);
 		strcat(xVal, str);
@@ -391,7 +438,10 @@ PHP_FUNCTION(simulate)
 		php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", paramNames[i], parameter[i]);
 	}
 	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "t_end", tComm);
-	php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", "value_end", var[0]);
+	for (i = 0; i < noOfVars; i++)
+	{
+		php_printf("<tr><td>%s</td><td>%0.3f</td></tr>", varNames[i], var[i]);
+	}
 	php_printf("</table>");
 
 	if (status == fmi2OK)

@@ -4,6 +4,8 @@
   $paramNames = array();
   $paramRefs = array();
   $paramValues = array();
+  $varNames = array();
+  $varRefs = array();
 
   $i=0;
   while ($_POST["pname".$i])
@@ -26,7 +28,23 @@
     $i++;
   }
 
-  simulate($projname, $paramRefs, $paramValues, $paramNames);
+  $i=0;
+  while ($_POST["vname".$i])
+  {
+    $varNames[$i] = $_POST["vname".$i];
+    $i++;
+  }
+
+  $i=0;
+  while ($_POST["vref".$i])
+  {
+    $varRefs[$i] = (string)($_POST["vref".$i] - 1);
+    $i++;
+  }
+
+  if ($i==0) exit("<p>No output values selected!</p>");
+
+  simulate($projname, $paramRefs, $paramValues, $paramNames, $varRefs, $varNames);
   echo "<p> Simulation succesfully terminated.</p>";
   echo "<div id='plot'></div>";
 ?>

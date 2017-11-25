@@ -28,6 +28,7 @@
       <div id="parameterTable"></div>
       <button type='button' onclick="simulate()">Simulate</button>
       <div id="sim"></div>
+      <div id="err"></div>
       <p>
         <a href=".">Neu</a>
         <a href="/simulation/data">Daten</a>
@@ -59,23 +60,33 @@
         txt+="</tr>";
         xmlDoc = xml.responseXML;
         x = xmlDoc.getElementsByTagName("ScalarVariable");
+        var k=0;
+        var j=0;
         for (i=0;i<x.length;i++)
         {
           var name = x[i].attributes.getNamedItem("name").nodeValue;
           var valueReference = x[i].attributes.getNamedItem("valueReference").nodeValue;
           var causality = x[i].attributes.getNamedItem("causality").nodeValue;
           txt+="<tr>";
-          txt+="<td><label for='" + name + "'>" + name + "</label></td>";
           if (causality=="parameter")
           {
             var value = x[i].childNodes[1].attributes[0].nodeValue;
-            txt+="<td><input class = 'parameter' id='param" + i + "' type='text' name='" + name + "' valueReference='" + valueReference + "' value='" + value + "' index = '" + i + "'/></td>";
+            txt+="<td><label for='" + name + "'>" + name + "</label></td>";
+            txt+="<td><input class = 'parameter' id='param" + k + "' type='text' name='" + name + "' valueReference='" + valueReference + "' value='" + value + "' index = '" + k + "'/></td>";
+            txt+="<td><input id='checkParam" + k + "' type='checkbox'></td>";
+            k++;
+          }
+          else if (causality=="local")
+          {
+            txt+="<td><label for='" + name + "' class = 'variable' name='" + name + "' valueReference='" + valueReference + "' index = '" + j + "'>" + name + "</label></td>";
+            txt+="<td></td>";
+            txt+="<td><input id='checkVar" + j + "' type='checkbox'></td>";
+            j++;
           }
           else
           {
             txt+="<td></td>";
           }
-          txt+="<td><input id='check" + i + "' type='checkbox'></td>";
           txt+="</tr>";
         }
         txt+="</table>";
@@ -92,34 +103,46 @@
         };
 
         var parameterlist = "";
-        var variationParameter = document.getElementById("variationParameter");
-        var parameter = variationParameter.getElementsByTagName("input");
-        j=0;
+        var projName = document.getElementById("projektname");
+        parameterlist+="projname=";
+        parameterlist+=projName.value;
+
+        var parameter = document.getElementsByClassName("parameter");
+        var j=0;
         for (i=0;i<parameter.length;i++)
         {
-          if(parameter[i].getAttribute("id")=="projektname")
+          var index = parameter[i].getAttribute("index");
+          var isChecked = document.getElementById("checkParam"+index).checked;
+          if (isChecked)
           {
-            if(i>0) parameterlist+="&";
-            parameterlist+="projname=";
+            parameterlist+="&";
+            parameterlist+="pname"+j+"=";
+            parameterlist+=parameter[i].getAttribute("name");
+            parameterlist+="&";
+            parameterlist+="pref"+j+"=";
+            parameterlist+=parameter[i].getAttribute("valueReference");
+            parameterlist+="&";
+            parameterlist+="pval"+j+"=";
             parameterlist+=parameter[i].value;
+            j++;
           }
-          else if (parameter[i].getAttribute("class")=="parameter")
+        }
+
+        variables = document.getElementsByClassName("variable");
+        j=0;
+        for (i=0;i<variables.length;i++)
+        {
+          var index = variables[i].getAttribute("index");
+          var isChecked = document.getElementById("checkVar"+index).checked;
+          if (isChecked)
           {
-            var index = parameter[i].getAttribute("index");
-            var isChecked = document.getElementById("check"+index).checked;
-            if (isChecked)
-            {
-              if(i>0) parameterlist+="&";
-              parameterlist+="pname"+j+"=";
-              parameterlist+=parameter[i].getAttribute("name");
-              parameterlist+="&";
-              parameterlist+="pref"+j+"=";
-              parameterlist+=parameter[i].getAttribute("valueReference");
-              parameterlist+="&";
-              parameterlist+="pval"+j+"=";
-              parameterlist+=parameter[i].value;
-              j++;
-            }
+            parameterlist+="&";
+            parameterlist+="vname"+j+"=";
+            parameterlist+=variables[i].getAttribute("name");
+            parameterlist+="&";
+            parameterlist+="vref"+j+"=";
+            parameterlist+=parseInt(variables[i].getAttribute("valueReference"))+1;
+            j++;
           }
         }
 
@@ -131,24 +154,40 @@
       function plot()
       {
         var name = document.getElementById("projektname").value;
-        makeplot("/simulation/data/"+name+".txt");
-      }
-
-      function makeplot(resultFile) {
+        resultFile = "/simulation/data/"+name+".txt";
         Plotly.d3.csv(resultFile, function(data){ processData(data) } );
       }
 
       function processData(allRows) {
-        var x = [], y = [];
-        for (var i=0; i<allRows.length; i++) {
-            row = allRows[i];
-            x.push( row['time'] );
-            y.push( row['value'] );
+        var plotVars = [];
+        var plotSlot = "";
+        var variables = document.getElementsByClassName("variable");
+        var j=0;
+        for (i=0;i<variables.length;i++)
+        {
+          var index = variables[i].getAttribute("index");
+          var isChecked = document.getElementById("checkVar"+index).checked;
+          if (isChecked)
+          {
+            plotVars[j] = variables[i].getAttribute("name");
+            plotSlot+="<div id='plot" + j + "'></div>";
+            j++;
+          }
         }
-        makePlotly( x, y);
+        document.getElementById("plot").innerHTML = plotSlot;
+        for (j=0;j<plotVars.length;j++)
+        {
+          var x = [], y = [];
+          for (var i=0; i<allRows.length; i++) {
+              row = allRows[i];
+              x.push( row['time'] );
+              y.push( row[plotVars[j]] );
+          }
+          makePlotly( x, y, plotVars[j], "plot"+j);
+        }
       }
 
-      function makePlotly( x, y){
+      function makePlotly( x, y, valueName, plotField){
         var name = document.getElementById("projektname").value;
         var traces = [{
           x: x,
@@ -159,9 +198,9 @@
 		      height: 500,
           title: name,
 		      xaxis: {title: 'Time [s]'},
-          yaxis: {title: 'Value'}
+          yaxis: {title: valueName}
         };
-        Plotly.newPlot('plot', traces,layout);
+        Plotly.newPlot(plotField, traces,layout);
       }
     </script>
   </body>
