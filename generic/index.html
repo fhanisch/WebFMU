@@ -59,6 +59,7 @@
         var options = document.getElementById("modelSelection").options;
         getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
         showModelDescription(options[selectedIndex].text);
+        document.getElementById("sim").innerHTML = "";
       }
 
       function showModelDescription(modelDescriptionName)
