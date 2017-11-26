@@ -1,0 +1,9 @@
+<p>Differentialgleichungssytem des schrägen Wurfs:</p>
+<p id="formel">
+  \begin{equation}
+    \dot{v}_x = 0 \\
+    \dot{v}_y = -g \\
+    \dot{x} = v_x \\
+    \dot{y} = v_y
+  \end{equation}
+</p>

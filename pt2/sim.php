@@ -1,6 +1,7 @@
 <?php
 
   $projname = $_POST["projname"];
+  $fmuname = $_POST["fmuname"];
   $paramNames = array();
   $paramRefs = array();
   $paramValues = array();
@@ -44,7 +45,7 @@
 
   if ($i==0) exit("<p>No output values selected!</p>");
 
-  simulate($projname, $paramRefs, $paramValues, $paramNames, $varRefs, $varNames);
+  simulate($projname, $fmuname, $paramRefs, $paramValues, $paramNames, $varRefs, $varNames);
   echo "<p> Simulation succesfully terminated.</p>";
   echo "<div id='plot'></div>";
 ?>

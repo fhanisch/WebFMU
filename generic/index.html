@@ -1,73 +1,263 @@
 <!doctype html>
 <html lang="de">
+
   <head>
     <title>Simulation</title>
     <meta charset="utf-8">
     <link rel="stylesheet" href="style.css"/>
-</head>
-  <body>
-    <div id="parameter"></div>
-    <div id="sim"></div>
-    <script>
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == 4 && this.status == 200) {
-            myFunction(this);
-        }
-    };
-    xhttp.open("GET", "/simulation/fmu/modelDescription.xml", true);
-    xhttp.send();
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <!--<script type="text/javascript" src="../MathJax/MathJax.js?config=TeX-AMS_HTML"></script>-->
+    <script type="text/javascript" async
+      src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+  </head>
 
-    function myFunction(xml) {
-      var x, xmlDoc;
-      var txt = "<table id='variationParameter'>";
-      xmlDoc = xml.responseXML;
-      x = xmlDoc.getElementsByTagName("ScalarVariable");
-      for (i=0;i<x.length;i++)
-      {
-        var name = x[i].attributes.getNamedItem("name").nodeValue;
-        var valueReference = x[i].attributes.getNamedItem("valueReference").nodeValue;
-        var causality = x[i].attributes.getNamedItem("causality").nodeValue;
-        if (causality=="parameter")
-        {
-          var value = x[i].childNodes[1].attributes[0].nodeValue;
-          txt+="<tr>";
-          txt+="<td><label for='" + name + "'>" + name + "</label></td>";
-          txt+="<td><input id='param" + i + "' type='text' name='" + name + "" + "' valueReference='" + valueReference + "' value='" + value + "'/></td>";
-          txt+="</tr>";
-        }
-      }
-      txt+="</table>";
-      txt+="<button type='button' onclick='simulate()'>Simulate</button>";
-      document.getElementById("parameter").innerHTML = txt;
-    }
-    function simulate()
-    {
+  <body>
+
+    <header>
+      <h1>Simulation</h1>
+    </header>
+
+    <main>
+      <div id="modelmenu"></div>
+      <h2 id="modelName"></h2>
+      <div id="modelInfo"></div>
+      <div id="parameterTable"></div>
+      <button type='button' onclick="simulate()">Simulate</button>
+      <div id="sim"></div>
+      <div id="err"></div>
+      <p>
+        <a href=".">Neu</a>
+        <a href="/simulation/data">Daten</a>
+        <a href="model_parameter.html">Model Paramter</a>
+        <a href="/simulation/fmu/modelDescription.xml">ModelDescription</a>
+      </p>
+    </main>
+
+    <footer>
+      <p>FH 2017</p>
+    </footer>
+
+    <script>
+      var fmuName; //globale Variable
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {
         if (this.readyState == 4 && this.status == 200) {
-          document.getElementById("sim").innerHTML = this.responseText;
+          document.getElementById("modelmenu").innerHTML = this.responseText;
+          var selectedIndex = document.getElementById("modelSelection").selectedIndex;
+          var options = document.getElementById("modelSelection").options;
+          getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
+          showModelDescription(options[selectedIndex].text);
         }
       };
+      xhttp.open("GET", "modelmenu.php", true);
+      xhttp.send();
 
-      var parameterlist = "";
-      var variationParameter = document.getElementById("variationParameter");
-      var parameter = variationParameter.getElementsByTagName("input");
-
-      for (i=0;i<parameter.length;i++)
+      function changeSelection()
       {
-        if(i>0) parameterlist+="&";
-        parameterlist+="pref"+i+"=";
-        parameterlist+=parameter[i].getAttribute("valueReference");
-        parameterlist+="&";
-        parameterlist+="pval"+i+"=";
-        parameterlist+=parameter[i].value;
+        var selectedIndex = document.getElementById("modelSelection").selectedIndex;
+        var options = document.getElementById("modelSelection").options;
+        getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
+        showModelDescription(options[selectedIndex].text);
       }
 
-      xhttp.open("POST", "sim.php", true);
-      xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      xhttp.send(parameterlist);
-    }
+      function showModelDescription(modelDescriptionName)
+      {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                myFunction(this);
+            }
+        };
+        xhttp.open("GET", "/simulation/fmu/" + modelDescriptionName + ".xml", true);
+        xhttp.send();
+      }
+
+      function getAdditionalModelInfo(modelInfoName)
+      {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                document.getElementById("modelInfo").innerHTML = this.responseText;
+                MathJax.Hub.Typeset();
+            }
+        };
+        xhttp.open("GET", "/simulation/fmu/" + modelInfoName + ".txt", true);
+        xhttp.send();
+      }
+
+      function myFunction(xml) {
+        var x, xmlDoc;
+        var txt = "<table id='variationParameter'>";
+        txt+="<tr>";
+        txt+="<td><label for='projektname'>Projektname</label></td>"
+        txt+="<td><input id='projektname' type='text' name='projektname' value='proj1'/></td>"
+        txt+="</tr>";
+        xmlDoc = xml.responseXML;
+        var fmiModelDescription = xmlDoc.getElementsByTagName("fmiModelDescription");
+        var modelName = fmiModelDescription[0].attributes.getNamedItem("modelName").nodeValue;
+        var coSimulationAttributs = xmlDoc.getElementsByTagName("CoSimulation");
+        fmuName = coSimulationAttributs[0].attributes.getNamedItem("modelIdentifier").nodeValue;
+        document.getElementById("modelName").innerHTML = modelName + " - FMU";
+        x = xmlDoc.getElementsByTagName("ScalarVariable");
+        var k=0;
+        var j=0;
+        for (i=0;i<x.length;i++)
+        {
+          var name = x[i].attributes.getNamedItem("name").nodeValue;
+          var valueReference = x[i].attributes.getNamedItem("valueReference").nodeValue;
+          var causality = x[i].attributes.getNamedItem("causality").nodeValue;
+          txt+="<tr>";
+          if (causality=="parameter")
+          {
+            var value = x[i].childNodes[1].attributes[0].nodeValue;
+            txt+="<td><label for='" + name + "'>" + name + "</label></td>";
+            txt+="<td><input class = 'parameter' id='param" + k + "' type='text' name='" + name + "' valueReference='" + valueReference + "' value='" + value + "' index = '" + k + "'/></td>";
+            txt+="<td><input id='checkParam" + k + "' type='checkbox'></td>";
+            k++;
+          }
+          else if (causality=="local")
+          {
+            txt+="<td><label for='" + name + "' class = 'variable' name='" + name + "' valueReference='" + valueReference + "' index = '" + j + "'>" + name + "</label></td>";
+            txt+="<td></td>";
+            txt+="<td><input id='checkVar" + j + "' type='checkbox'></td>";
+            j++;
+          }
+          else
+          {
+            txt+="<td></td>";
+          }
+          txt+="</tr>";
+        }
+        txt+="</table>";
+        document.getElementById("parameterTable").innerHTML = txt;
+      }
+      function simulate()
+      {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            document.getElementById("sim").innerHTML = this.responseText;
+            plot();
+          }
+        };
+        var parameterlist = "";
+        var projName = document.getElementById("projektname");
+        parameterlist+="projname=";
+        parameterlist+=projName.value;
+        parameterlist+="&";
+        parameterlist+="fmuname=";
+        parameterlist+=fmuName + ".so";
+
+        var parameter = document.getElementsByClassName("parameter");
+        var j=0;
+        for (i=0;i<parameter.length;i++)
+        {
+          var index = parameter[i].getAttribute("index");
+          var isChecked = document.getElementById("checkParam"+index).checked;
+          if (isChecked)
+          {
+            parameterlist+="&";
+            parameterlist+="pname"+j+"=";
+            parameterlist+=parameter[i].getAttribute("name");
+            parameterlist+="&";
+            parameterlist+="pref"+j+"=";
+            parameterlist+=parameter[i].getAttribute("valueReference");
+            parameterlist+="&";
+            parameterlist+="pval"+j+"=";
+            parameterlist+=parameter[i].value;
+            j++;
+          }
+        }
+
+        variables = document.getElementsByClassName("variable");
+        j=0;
+        for (i=0;i<variables.length;i++)
+        {
+          var index = variables[i].getAttribute("index");
+          var isChecked = document.getElementById("checkVar"+index).checked;
+          if (isChecked)
+          {
+            parameterlist+="&";
+            parameterlist+="vname"+j+"=";
+            parameterlist+=variables[i].getAttribute("name");
+            parameterlist+="&";
+            parameterlist+="vref"+j+"=";
+            parameterlist+=parseInt(variables[i].getAttribute("valueReference"))+1;
+            j++;
+          }
+        }
+        //document.getElementById("err").innerHTML = parameterlist;
+        xhttp.open("POST", "sim.php", true);
+        xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+        xhttp.send(parameterlist);
+      }
+
+      function plot()
+      {
+        var name = document.getElementById("projektname").value;
+        resultFile = "/simulation/data/"+name+".txt";
+        Plotly.d3.csv(resultFile, function(data){ processData(data) } );
+      }
+
+      function processData(allRows) {
+        var plotVars = [];
+        var plotSlot = "";
+        var variables = document.getElementsByClassName("variable");
+        var j=0;
+        for (i=0;i<variables.length;i++)
+        {
+          var index = variables[i].getAttribute("index");
+          var isChecked = document.getElementById("checkVar"+index).checked;
+          if (isChecked)
+          {
+            plotVars[j] = variables[i].getAttribute("name");
+            plotSlot+="<div id='plot" + j + "'></div>";
+            j++;
+          }
+        }
+        if (plotVars.length==2)
+        {
+            plotSlot+="<div id='plot_traj'></div>";
+        }
+        document.getElementById("plot").innerHTML = plotSlot;
+        for (j=0;j<plotVars.length;j++)
+        {
+          var x = [], y = [];
+          for (var i=0; i<allRows.length; i++) {
+              row = allRows[i];
+              x.push( row['time'] );
+              y.push( row[plotVars[j]] );
+          }
+          makePlotly( x, y, "Time [s]", plotVars[j], "plot"+j);
+        }
+        if (plotVars.length==2)
+        {
+          var x = [], y = [];
+          for (var i=0; i<allRows.length; i++) {
+              row = allRows[i];
+              x.push( row[plotVars[0]] );
+              y.push( row[plotVars[1]] );
+          }
+          makePlotly( x, y, plotVars[0], plotVars[1], "plot_traj");
+        }
+      }
+
+      function makePlotly( x, y, xLabel, yLabel, plotField){
+        var name = document.getElementById("projektname").value;
+        var traces = [{
+          x: x,
+          y: y,
+          mode: 'lines',marker: {color: 'rgb(219, 64, 82)',size : 12}
+        }];
+        var layout = {
+		      height: 500,
+          title: name,
+		      xaxis: {title: xLabel},
+          yaxis: {title: yLabel}
+        };
+        Plotly.newPlot(plotField, traces,layout);
+      }
     </script>
   </body>
 

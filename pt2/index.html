@@ -19,12 +19,9 @@
     </header>
 
     <main>
-      <h2>PT2 - FMU</h2>
-      <p ID="formel">
-        \begin{equation}
-        \ddot{x} = \frac{1}{c_2} (k-c_1\dot{x}-x)
-        \end{equation}
-      </p>
+      <div id="modelmenu"></div>
+      <h2 id="modelName"></h2>
+      <div id="modelInfo"></div>
       <div id="parameterTable"></div>
       <button type='button' onclick="simulate()">Simulate</button>
       <div id="sim"></div>
@@ -42,14 +39,52 @@
     </footer>
 
     <script>
+      var fmuName; //globale Variable
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {
-          if (this.readyState == 4 && this.status == 200) {
-              myFunction(this);
-          }
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("modelmenu").innerHTML = this.responseText;
+          var selectedIndex = document.getElementById("modelSelection").selectedIndex;
+          var options = document.getElementById("modelSelection").options;
+          getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
+          showModelDescription(options[selectedIndex].text);
+        }
       };
-      xhttp.open("GET", "/simulation/fmu/modelDescription.xml", true);
-      xhttp.send();
+      xhttp.open("GET", "modelmenu.php", true);
+      xhttp.send();
+
+      function changeSelection()
+      {
+        var selectedIndex = document.getElementById("modelSelection").selectedIndex;
+        var options = document.getElementById("modelSelection").options;
+        getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
+        showModelDescription(options[selectedIndex].text);
+      }
+
+      function showModelDescription(modelDescriptionName)
+      {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                myFunction(this);
+            }
+        };
+        xhttp.open("GET", "/simulation/fmu/" + modelDescriptionName + ".xml", true);
+        xhttp.send();
+      }
+
+      function getAdditionalModelInfo(modelInfoName)
+      {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                document.getElementById("modelInfo").innerHTML = this.responseText;
+                MathJax.Hub.Typeset();
+            }
+        };
+        xhttp.open("GET", "/simulation/fmu/" + modelInfoName + ".txt", true);
+        xhttp.send();
+      }
 
       function myFunction(xml) {
         var x, xmlDoc;
@@ -59,6 +94,11 @@
         txt+="<td><input id='projektname' type='text' name='projektname' value='proj1'/></td>"
         txt+="</tr>";
         xmlDoc = xml.responseXML;
+        var fmiModelDescription = xmlDoc.getElementsByTagName("fmiModelDescription");
+        var modelName = fmiModelDescription[0].attributes.getNamedItem("modelName").nodeValue;
+        var coSimulationAttributs = xmlDoc.getElementsByTagName("CoSimulation");
+        fmuName = coSimulationAttributs[0].attributes.getNamedItem("modelIdentifier").nodeValue;
+        document.getElementById("modelName").innerHTML = modelName + " - FMU";
         x = xmlDoc.getElementsByTagName("ScalarVariable");
         var k=0;
         var j=0;
@@ -101,11 +141,13 @@
             plot();
           }
         };
-
         var parameterlist = "";
         var projName = document.getElementById("projektname");
         parameterlist+="projname=";
         parameterlist+=projName.value;
+        parameterlist+="&";
+        parameterlist+="fmuname=";
+        parameterlist+=fmuName + ".so";
 
         var parameter = document.getElementsByClassName("parameter");
         var j=0;
@@ -145,7 +187,7 @@
             j++;
           }
         }
-
+        //document.getElementById("err").innerHTML = parameterlist;
         xhttp.open("POST", "sim.php", true);
         xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
         xhttp.send(parameterlist);
@@ -174,6 +216,10 @@
             j++;
           }
         }
+        if (plotVars.length==2)
+        {
+            plotSlot+="<div id='plot_traj'></div>";
+        }
         document.getElementById("plot").innerHTML = plotSlot;
         for (j=0;j<plotVars.length;j++)
         {
@@ -183,11 +229,21 @@
               x.push( row['time'] );
               y.push( row[plotVars[j]] );
           }
-          makePlotly( x, y, plotVars[j], "plot"+j);
+          makePlotly( x, y, "Time [s]", plotVars[j], "plot"+j);
+        }
+        if (plotVars.length==2)
+        {
+          var x = [], y = [];
+          for (var i=0; i<allRows.length; i++) {
+              row = allRows[i];
+              x.push( row[plotVars[0]] );
+              y.push( row[plotVars[1]] );
+          }
+          makePlotly( x, y, plotVars[0], plotVars[1], "plot_traj");
         }
       }
 
-      function makePlotly( x, y, valueName, plotField){
+      function makePlotly( x, y, xLabel, yLabel, plotField){
         var name = document.getElementById("projektname").value;
         var traces = [{
           x: x,
@@ -197,8 +253,8 @@
         var layout = {
 		      height: 500,
           title: name,
-		      xaxis: {title: 'Time [s]'},
-          yaxis: {title: valueName}
+		      xaxis: {title: xLabel},
+          yaxis: {title: yLabel}
         };
         Plotly.newPlot(plotField, traces,layout);
       }

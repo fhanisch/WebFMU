@@ -201,7 +201,8 @@ PHP_FUNCTION(simulate)
 	int j;
 	char path[] = "/var/www/html/simulation/data/";
 	char fmuPath[] = "/var/www/html/simulation/fmu/";
-	char fmuFileName[] = "DevLib_PT2.so";
+	char *fmuFileName;
+	int fmuFileNameLen;
 	char fmuFullFilePath[128];
 	char str[128];
 	//char xVal[10000];
@@ -212,7 +213,7 @@ PHP_FUNCTION(simulate)
 	HashTable *arr_hash;
 	HashPosition pointer;
 
-	fmi2String instanceName = "PT1_FMU";
+	fmi2String instanceName = "WebFMU";
 	fmi2String guid = "{8c4e810f-3df3-4a00-8276-176fa3c9f9e0}";
 	fmi2String fmuResourcesLocation = NULL;
 	fmi2Real tolerance = 0.000001;
@@ -230,7 +231,7 @@ PHP_FUNCTION(simulate)
 	fmi2ValueReference *varRefs;
 	fmi2String *varNames;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "saaaaa", &name, &name_len, &arrParamRefs, &arrParam, &arrParamNames, &arrVarRefs, &arrVarNames) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ssaaaaa", &name, &name_len, &fmuFileName, &fmuFileNameLen, &arrParamRefs, &arrParam, &arrParamNames, &arrVarRefs, &arrVarNames) == FAILURE) {
 		RETURN_NULL();
 	}
 

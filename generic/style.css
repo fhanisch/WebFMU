@@ -70,7 +70,7 @@ footer {
 table {
 		border-collapse: collapse;
 		color: blue;
-    width: 25%;
+    width: 50%;
 }
 
 th, td {
@@ -79,9 +79,18 @@ th, td {
     padding: 10px;
 }
 
-.mydiv {
-	column-count: 4;
+tr:nth-child(even){background-color: #f2f2f2}
+tr:hover {background-color: #ddd}
+
+.settings {
+	width: 50%;
 	font-size: 16px;
+	color: #2e8b57;
+}
+
+.mydiv {
+	column-count: 2;
+	width: 50%;
 }
 
 input[type=text], select {
@@ -112,21 +121,15 @@ input[type=submit]:hover {
 }
 
 button {
-	width: 25%;
-  background-color: #f44336;
-  color: white;
-  padding: 14px 20px;
-  margin: 8px 0;
-	font-size: 20px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.centerbox {
-	display: flex;
-  align-items: center;
-  justify-content: center;
+		width: 25%;
+    background-color: #f44336;
+    color: white;
+    padding: 14px 20px;
+    margin: 8px 0;
+		font-size: 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
 button:hover {

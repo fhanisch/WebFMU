@@ -1,0 +1,5 @@
+<p id="formel">
+  \begin{equation}
+  \ddot{x} = \frac{1}{c_2} (k-c_1\dot{x}-x)
+  \end{equation}
+</p>
