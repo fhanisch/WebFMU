@@ -1,10 +1,11 @@
-//gcc -o server server.c -ldl
+//gcc -std=c11 -o server server.c -ldl
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 #include <dlfcn.h>
 #include "fmi2FunctionTypes.h"
 
@@ -18,6 +19,18 @@ typedef struct
 	int len;
 	char name[256];
 } Token;
+
+typedef struct
+{
+	size_t noOfParam;
+	fmi2Real parameter[100];
+	fmi2ValueReference paramRefs[100];
+	fmi2String paramNames[100];
+	size_t noOfVars;
+	fmi2Real var[100];
+	fmi2ValueReference varRefs[100];
+	fmi2String varNames[100];
+} Variables;
 
 const char header[] = "HTTP/1.1 200 OK\r\n\r\n";
 
@@ -136,15 +149,11 @@ int sim_pt1(double t[], double x[], double tau, int i)
 	return 0;
 }
 
-int simulate()
+int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 {
-	char *name;
-	int name_len;
 	int i = 0;
 	int j;
-	char path[] = "/var/www/html/simulation/data/";
 	char str[128];
-	char htmlbuf[5000];
 	FILE *result;
 	fmi2Real tolerance = 0.000001;
 	fmi2Real tStart = 0;
@@ -152,26 +161,17 @@ int simulate()
 	fmi2Real tComm = tStart;
 	fmi2Real tCommStep = 0.001; // FMU Exports duch OMC verwenden nur den Euler --> dort gibt es keine interne Schrittweite --> es wird nur die Kommunikationsschrittweite verwendet
 	fmi2Status status = fmi2OK;
-	size_t noOfParam;
-	fmi2Real *parameter;
-	fmi2ValueReference *paramRefs;
-	fmi2String *paramNames;
-	size_t noOfVars;
-	fmi2Real *var;
-	fmi2ValueReference *varRefs;
-	fmi2String *varNames;
 
-	sprintf(str, "%s%s%s", path, name, ".txt");
-	result = fopen(str, "w");
+	result = fopen(resultFullFilePath, "w");
 
 	strcpy(str, "Simulate FMU.\n");
 	fwrite(str, 1, strlen(str), logfile);
 
 	sprintf(str, "%s,%s", "index", "time");
 	fwrite(str, 1, strlen(str), result);
-	for (j = 0; j < noOfVars; j++)
+	for (j = 0; j < variables->noOfVars; j++)
 	{
-		sprintf(str, ",%s", varNames[j]);
+		sprintf(str, ",%s", variables->varNames[j]);
 		fwrite(str, 1, strlen(str), result);
 	}
 	fwrite("\n", 1, 1, result);
@@ -184,7 +184,7 @@ int simulate()
 		return -1;
 	}
 
-	if (fmi2SetReal(fmuInstance, paramRefs, noOfParam, parameter) != fmi2OK)
+	if (fmi2SetReal(fmuInstance, variables->paramRefs, variables->noOfParam, variables->parameter) != fmi2OK)
 	{
 		sprintf(str, "Set real failed!\n");
 		fwrite(str, 1, strlen(str), logfile);
@@ -208,7 +208,7 @@ int simulate()
 		return -1;
 	}
 
-	status = fmi2GetReal(fmuInstance, varRefs, noOfVars, var);
+	status = fmi2GetReal(fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
 	if (status != fmi2OK)
 	{
 		sprintf(str, "Error getReal!\n");
@@ -216,9 +216,9 @@ int simulate()
 	}
 	sprintf(str, "%d,%0.3f", i, tComm);
 	fwrite(str, 1, strlen(str), result);
-	for (j = 0; j < noOfVars; j++)
+	for (j = 0; j < variables->noOfVars; j++)
 	{
-		sprintf(str, ",%0.3f", var[j]);
+		sprintf(str, ",%0.3f", variables->var[j]);
 		fwrite(str, 1, strlen(str), result);
 	}
 	fwrite("\n", 1, 1, result);
@@ -233,7 +233,7 @@ int simulate()
 		}
 		tComm += tCommStep;
 		i++;
-		status = fmi2GetReal(fmuInstance, varRefs, noOfVars, var);
+		status = fmi2GetReal(fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
 		if (status != fmi2OK)
 		{
 			sprintf(str, "Error getReal!\n");
@@ -241,26 +241,26 @@ int simulate()
 		}
 		sprintf(str, "%d,%0.3f", i, tComm);
 		fwrite(str, 1, strlen(str), result);
-		for (j = 0; j < noOfVars; j++)
+		for (j = 0; j < variables->noOfVars; j++)
 		{
-			sprintf(str, ",%0.3f", var[j]);
+			sprintf(str, ",%0.3f", variables->var[j]);
 			fwrite(str, 1, strlen(str), result);
 		}
 		fwrite("\n", 1, 1, result);
 	}
 
 	sprintf(htmlbuf, "%s", "<table>");
-	sprintf(htmlbuf, "<tr><td>%s</td><td>%s</td></tr>", "Projektname", name);
-	for (i = 0; i < noOfParam; i++)
+	sprintf(htmlbuf+strlen(htmlbuf), "<tr><td>%s</td><td>%s</td></tr>", "Projektname", resultFullFilePath);
+	for (i = 0; i < variables->noOfParam; i++)
 	{
-		sprintf(htmlbuf, "<tr><td>%s</td><td>%0.3f</td></tr>", paramNames[i], parameter[i]);
+		sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3f</td></tr>", variables->paramNames[i], variables->parameter[i]);
 	}
-	sprintf(htmlbuf, "<tr><td>%s</td><td>%0.3f</td></tr>", "t_end", tComm);
-	for (i = 0; i < noOfVars; i++)
+	sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3f</td></tr>", "t_end", tComm);
+	for (i = 0; i < variables->noOfVars; i++)
 	{
-		sprintf(htmlbuf, "<tr><td>%s</td><td>%0.3f</td></tr>", varNames[i], var[i]);
+		sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3f</td></tr>", variables->varNames[i], variables->var[i]);
 	}
-	sprintf(htmlbuf, "</table>");
+	sprintf(htmlbuf + strlen(htmlbuf), "</table>");
 
 	if (status == fmi2OK)
 	{
@@ -273,7 +273,6 @@ int simulate()
 	fwrite(str, 1, strlen(str), logfile);
 	printf("%s", str);
 	fclose(result);
-	fclose(logfile);
 
 	return 0;
 }
@@ -286,7 +285,7 @@ int readFile(char *filename, char **data)
 	file = fopen(filename, "r");
 	fseek(file, 0, SEEK_END);
 	filesize = ftell(file);
-	printf("filesize: %d\n\n", filesize);
+	printf("filesize: %d\n", filesize);
 	rewind(file);
 	*data = (char*)malloc(filesize + 1);
 	memset(*data, 0, filesize + 1);
@@ -294,6 +293,21 @@ int readFile(char *filename, char **data)
 	fclose(file);
 
 	return 0;
+}
+
+char getNextDelimiter(char *src, int *ptr, char *delimiter)
+{
+	*ptr = 0;
+	while (src[*ptr] != 0)
+	{
+		for (uint32_t i = 0; i < strlen(delimiter); i++)
+		{
+			if (src[*ptr] == delimiter[i]) return delimiter[i];
+		}
+		(*ptr)++;
+	}
+
+	return -1;
 }
 
 int findNextToken(char *src, int ptr, Token *tk)
@@ -339,6 +353,12 @@ int main(int argc, char *argv[])
 	char fmuPath[] = "fmu/";
 	char fmuFileName[64];
 	char fmuFullFilePath[128];
+	char resultFilePath[] = "data/";
+	char resultFileName[64];
+	char resultFullFilePath[128];
+	Variables variables;
+	char htmlbuf[5000];
+
 	fmi2String instanceName = "WebFMU";
 	fmi2String guid = "{8c4e810f-3df3-4a00-8276-176fa3c9f9e0}";
 	fmi2String fmuResourcesLocation = NULL;
@@ -389,7 +409,7 @@ int main(int argc, char *argv[])
 
 	while (!quit)
 	{
-		printf("Wait for connection...\n\n");
+		//printf("Wait for connection...\n\n");
 		serverSocket = accept(acceptSocket, NULL, NULL);
 		if (serverSocket<0)
 		{
@@ -397,7 +417,7 @@ int main(int argc, char *argv[])
 			close(acceptSocket);
 			return 1;
 		}
-		printf("Connection accepted.\n\n");
+		//printf("Connection accepted.\n\n");
 		
 		if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 0)
 		{
@@ -406,7 +426,7 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		recvbuf[numbytes] = 0;
-		printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
+		//printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
 
 		if (strstr(recvbuf, "GET / HTTP/1.1"))
 		{
@@ -416,7 +436,7 @@ int main(int argc, char *argv[])
 				close(serverSocket);
 				continue;
 			}
-			printf("%i Bytes sent.\n\n", numbytes);
+			//printf("%i Bytes sent.\n\n", numbytes);
 		}
 		else if (strstr(recvbuf, "GET /style.css"))
 		{
@@ -426,7 +446,7 @@ int main(int argc, char *argv[])
 				close(serverSocket);
 				continue;
 			}
-			printf("%i Bytes sent.\n\n", numbytes);
+			//printf("%i Bytes sent.\n\n", numbytes);
 		}
 		else if (strstr(recvbuf, "GET /modelmenu"))
 		{
@@ -436,7 +456,7 @@ int main(int argc, char *argv[])
 				close(serverSocket);
 				continue;
 			}
-			printf("%i Bytes sent.\n\n", numbytes);
+			//printf("%i Bytes sent.\n\n", numbytes);
 		}
 		else if (strstr(recvbuf, "GET /simulation/fmu/modelInfoPT2.txt"))
 		{
@@ -446,7 +466,7 @@ int main(int argc, char *argv[])
 				close(serverSocket);
 				continue;
 			}
-			printf("%i Bytes sent.\n\n", numbytes);
+			//printf("%i Bytes sent.\n\n", numbytes);
 		}
 
 		else if (strstr(recvbuf, "GET /simulation/fmu/modelDescriptionPT2.xml"))
@@ -457,7 +477,7 @@ int main(int argc, char *argv[])
 				close(serverSocket);
 				continue;
 			}
-			printf("%i Bytes sent.\n\n", numbytes);
+			//printf("%i Bytes sent.\n\n", numbytes);
 		}
 
 		else if (strstr(recvbuf, "GET /log"))
@@ -468,17 +488,17 @@ int main(int argc, char *argv[])
 				close(serverSocket);
 				continue;
 			}
-			printf("%i Bytes sent.\n\n", numbytes);
+			//printf("%i Bytes sent.\n\n", numbytes);
 		}
 
 		else if (strstr(recvbuf, "POST /sim"))
 		{
-			sprintf(str, "%s", "log.txt");
-			logfile = fopen(str, "w");
+			logfile = fopen("log.txt", "w");
 			postParamOffset = strstr(recvbuf, "projname");
 			token.offset = (int)(postParamOffset - recvbuf);
 			token.len = 0;
-			printf("%d\n", token.offset);
+			variables.noOfParam = 0;
+			variables.noOfVars = 0;
 			while (!findNextToken(recvbuf, token.offset + token.len, &token))
 			{
 				if (!strcmp(token.name, "fmuname"))
@@ -486,25 +506,80 @@ int main(int argc, char *argv[])
 					findNextToken(recvbuf, token.offset + token.len, &token);
 					sprintf(fmuFileName, "%s%s", token.name, ".so");
 				}
+				else if (!strcmp(token.name, "projname"))
+				{
+
+					findNextToken(recvbuf, token.offset + token.len, &token);
+					sprintf(resultFileName, "%s%s", token.name, ".txt");
+				}
+				else if (strstr(token.name, "pname"))
+				{
+					getNextDelimiter(token.name, &i, "0123456789");
+					sscanf(token.name+i, "%d", &i);
+					printf("index: %d\n\t%s: ", i, token.name);
+					findNextToken(recvbuf, token.offset + token.len, &token);
+					variables.paramNames[i] = malloc(strlen(token.name));
+					strcpy((char*)variables.paramNames[i], token.name);
+					printf("%s\n", variables.paramNames[i]);
+					variables.noOfParam++;
+				}
+				else if (strstr(token.name, "pref"))
+				{
+					getNextDelimiter(token.name, &i, "0123456789");
+					sscanf(token.name + i, "%d", &i);
+					getNextDelimiter(recvbuf + token.offset + token.len, &i, "=");
+					sscanf(recvbuf + token.offset + token.len + i + 1, "%d", &variables.paramRefs[i]);
+					printf("\t%s = %d\n", token.name, variables.paramRefs[i]);
+				}
+				else if (strstr(token.name, "pval"))
+				{
+					getNextDelimiter(token.name, &i, "0123456789");
+					sscanf(token.name + i, "%d", &i);
+					getNextDelimiter(recvbuf + token.offset + token.len, &i, "=");
+					sscanf(recvbuf + token.offset + token.len + i + 1, "%lf", &variables.parameter[i]);
+					printf("\t%s = %0.3lf\n", token.name, variables.parameter[i]);
+				}
+				else if (strstr(token.name, "vname"))
+				{
+					getNextDelimiter(token.name, &i, "0123456789");
+					sscanf(token.name + i, "%d", &i);
+					printf("index: %d\n\t%s: ", i, token.name);
+					findNextToken(recvbuf, token.offset + token.len, &token);
+					variables.varNames[i] = malloc(strlen(token.name));
+					strcpy((char*)variables.varNames[i], token.name);
+					printf("%s\n", variables.varNames[i]);
+					variables.noOfVars++;
+				}
+				else if (strstr(token.name, "vref"))
+				{
+					getNextDelimiter(token.name, &i, "0123456789");
+					sscanf(token.name + i, "%d", &i);
+					getNextDelimiter(recvbuf + token.offset + token.len, &i, "=");
+					sscanf(recvbuf + token.offset + token.len + i + 1, "%d", &variables.varRefs[i]);
+					printf("\t%s = %d\n", token.name, variables.varRefs[i]);
+				}
 			}
 			sprintf(fmuFullFilePath, "%s%s", fmuPath, fmuFileName);
+			sprintf(resultFullFilePath, "%s%s", resultFilePath, resultFileName);
 			if (initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath) != 0)
 			{
 				fclose(logfile);
 				continue;
 			}
+			simulate(resultFullFilePath, &variables, htmlbuf);
 			fclose(logfile);
-			sprintf(simbuf, "%s<p>FMU %s instanciated.</p>", header, fmuFullFilePath);
+			sprintf(simbuf, "%s%s<p>FMU %s instanciated.</p><p>ResultFilePath: %s</p>"
+				"<p>Simulation succesfully terminated.</p>", header, htmlbuf, fmuFullFilePath, resultFullFilePath);
 			if ((numbytes = send(serverSocket, simbuf, strlen(simbuf), 0)) < 0)
 			{
 				printf("Senden failed!\n");
 				close(serverSocket);
 				continue;
 			}
-			printf("%i Bytes sent.\n\n", numbytes);
+			//printf("%i Bytes sent.\n\n", numbytes);
 		}
 			
-		for (i = 0; i<DELAY; i++);
+		//for (int i = 0; i<DELAY; i++);
 		close(serverSocket);
 	}
 
