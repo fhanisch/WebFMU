@@ -1,4 +1,5 @@
 //gcc -std=c11 -o server server.c -ldl
+/// @date: 01.12.2017
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,13 +16,6 @@ typedef int bool;
 
 typedef struct
 {
-	int offset;
-	int len;
-	char name[256];
-} Token;
-
-typedef struct
-{
 	size_t noOfParam;
 	fmi2Real parameter[100];
 	fmi2ValueReference paramRefs[100];
@@ -33,18 +27,6 @@ typedef struct
 } Variables;
 
 const char header[] = "HTTP/1.1 200 OK\r\n\r\n";
-
-const char modelmenu[] = "HTTP/1.1 200 OK\r\n\r\n"
-"<select id='modelSelection' onchange='changeSelection()' style='width: 50%'>"
-"<option>modelDescriptionPT2</option>"
-"</select>";
-
-const char modelinfo[] = "HTTP/1.1 200 OK\r\n\r\n"
-"<p id = 'formel'>"
-"\\begin{equation}"
-"\\ddot{ x } = \\frac{ 1 }{c_2} (k - c_1\\dot{ x }-x)"
-"\\end{equation}"
-"</p>";
 
 static void *handle;
 fmi2GetVersionTYPE *fmi2GetVersion;
@@ -128,7 +110,7 @@ int initFMU(fmi2String instanceName, fmi2String guid, fmi2String fmuResourcesLoc
 	}
 	strcpy(str, "FMU instanciated.\n");
 	fwrite(str, 1, strlen(str), logfile);
-	printf("%s", str);
+	//printf("%s", str);
 
 	return 0;
 }
@@ -253,12 +235,12 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 	sprintf(htmlbuf+strlen(htmlbuf), "<tr><td>%s</td><td>%s</td></tr>", "Projektname", resultFullFilePath);
 	for (i = 0; i < variables->noOfParam; i++)
 	{
-		sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3f</td></tr>", variables->paramNames[i], variables->parameter[i]);
+		sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3lf</td></tr>", variables->paramNames[i], variables->parameter[i]);
 	}
-	sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3f</td></tr>", "t_end", tComm);
+	sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3lf</td></tr>", "t_end", tComm);
 	for (i = 0; i < variables->noOfVars; i++)
 	{
-		sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3f</td></tr>", variables->varNames[i], variables->var[i]);
+		sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3lf</td></tr>", variables->varNames[i], variables->var[i]);
 	}
 	sprintf(htmlbuf + strlen(htmlbuf), "</table>");
 
@@ -271,13 +253,13 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 
 	strcpy(str, "Simulation succesfully terminated.\n");
 	fwrite(str, 1, strlen(str), logfile);
-	printf("%s", str);
+	//printf("%s", str);
 	fclose(result);
 
 	return 0;
 }
 
-int readFile(char *filename, char **data)
+int genSendBufFromFile(char *filename, char **buf)
 {
 	FILE *file;
 	int filesize;
@@ -285,52 +267,73 @@ int readFile(char *filename, char **data)
 	file = fopen(filename, "r");
 	fseek(file, 0, SEEK_END);
 	filesize = ftell(file);
-	printf("filesize: %d\n", filesize);
 	rewind(file);
-	*data = (char*)malloc(filesize + 1);
-	memset(*data, 0, filesize + 1);
-	fread(*data, filesize, 1, file);
+	*buf = (char*)malloc(strlen(header)+filesize + 1);
+	strcpy(*buf, header);
+	fread(*buf+strlen(header), filesize, 1, file);
+	(*buf)[strlen(header)+filesize] = 0;
 	fclose(file);
 
 	return 0;
 }
 
-char getNextDelimiter(char *src, int *ptr, char *delimiter)
+char getNextDelimiter(char **src, char *delimiter)
 {
-	*ptr = 0;
-	while (src[*ptr] != 0)
+	while (**src != 0)
 	{
 		for (uint32_t i = 0; i < strlen(delimiter); i++)
 		{
-			if (src[*ptr] == delimiter[i]) return delimiter[i];
+			if (**src == delimiter[i]) return delimiter[i];
 		}
-		(*ptr)++;
+		(*src)++;
 	}
 
 	return -1;
 }
 
-int findNextToken(char *src, int ptr, Token *tk)
+int findNextTokenLimited(char **src, char *token, char limit)
 {
-	int offset;
+	while (**src < 65)
+	{
+		if (**src == 0) return -1;
+		(*src)++;
+	}
+
+	char *start = *src;
 	int len = 0;
 
-	while (src[ptr] < 65)
+	while (**src!=limit)
 	{
-		if (src[ptr] == 0) return -1;
-		ptr++;
-	}
-	offset = ptr;
-	while ((src[ptr] >= 48 && src[ptr] <= 57) || src[ptr] >= 65)
-	{
-		if (src[ptr] == 0) return -1;
+		if (**src == 0) return -1;
 		len++;
-		ptr++;
+		(*src)++;
 	}
-	memcpy(tk->name, src + offset, len);
-	tk->name[len] = 0;
-	tk->offset = offset;
-	tk->len = len;
+	memcpy(token, start, len);
+	token[len] = 0;
+
+	return 0;
+}
+
+int findNextToken(char **src, char *token)
+{
+	while (**src < 65)
+	{
+		if (**src == 0) return -1;
+		(*src)++;
+	}
+	
+	char *start = *src;
+	int len = 0;
+
+	while ((**src >= 48 && **src <= 57) || **src >= 65)
+	{
+		if (**src == 0) return -1;
+		len++;
+		(*src)++;
+	}
+	memcpy(token, start, len);
+	token[len] = 0;
+	
 	return 0;
 }
 
@@ -342,14 +345,9 @@ int main(int argc, char *argv[])
 	bool quit = FALSE;
 	char str[128];
 	char recvbuf[1024];
-	char indexbuf[20000];
-	char stylebuf[20000];
-	char modelDescriptionBuf[5000];
-	char simbuf[5000];
-	char logbuf[5000];
+	char *sendbuf;
 	int numbytes;
 	int i;
-	char *data;
 	char fmuPath[] = "fmu/";
 	char fmuFileName[64];
 	char fmuFullFilePath[128];
@@ -357,13 +355,11 @@ int main(int argc, char *argv[])
 	char resultFileName[64];
 	char resultFullFilePath[128];
 	Variables variables;
-	char htmlbuf[5000];
-
+	char token[256];
 	fmi2String instanceName = "WebFMU";
 	fmi2String guid = "{8c4e810f-3df3-4a00-8276-176fa3c9f9e0}";
 	fmi2String fmuResourcesLocation = NULL;
-	Token token;
-	char *postParamOffset;
+	char *ptr;
 
 	printf("Web FMU Server\n\n");
 
@@ -391,24 +387,11 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	readFile("index.html", &data);
-	sprintf(indexbuf, "%s%s", header, data);
-	indexbuf[strlen(header) + strlen(data)] = 0;
-
-	readFile("style.css", &data);
-	sprintf(stylebuf, "%s%s", header, data);
-	stylebuf[strlen(header) + strlen(data)] = 0;
-
-	readFile("modelDescriptionPT2.xml", &data);
-	sprintf(modelDescriptionBuf, "%s%s", header, data);
-	modelDescriptionBuf[strlen(header) + strlen(data)] = 0;
-
-	readFile("log.txt", &data);
-	sprintf(logbuf, "%s%s", header, data);
-	logbuf[strlen(header) + strlen(data)] = 0;
+	printf("Server started ...\n");
 
 	while (!quit)
 	{
+		sendbuf = NULL;
 		//printf("Wait for connection...\n\n");
 		serverSocket = accept(acceptSocket, NULL, NULL);
 		if (serverSocket<0)
@@ -426,161 +409,128 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		recvbuf[numbytes] = 0;
-		//printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
+		printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
 
 		if (strstr(recvbuf, "GET / HTTP/1.1"))
 		{
-			if ((numbytes = send(serverSocket, indexbuf, strlen(indexbuf), 0)) < 0)
-			{
-				printf("Senden failed!\n");
-				close(serverSocket);
-				continue;
-			}
-			//printf("%i Bytes sent.\n\n", numbytes);
+			genSendBufFromFile("index.html", &sendbuf);
 		}
 		else if (strstr(recvbuf, "GET /style.css"))
 		{
-			if ((numbytes = send(serverSocket, stylebuf, strlen(stylebuf), 0)) < 0)
-			{
-				printf("Senden failed!\n");
-				close(serverSocket);
-				continue;
-			}
-			//printf("%i Bytes sent.\n\n", numbytes);
+			genSendBufFromFile("style.css", &sendbuf);
 		}
 		else if (strstr(recvbuf, "GET /modelmenu"))
 		{
-			if ((numbytes = send(serverSocket, modelmenu, strlen(modelmenu), 0)) < 0)
-			{
-				printf("Senden failed!\n");
-				close(serverSocket);
-				continue;
-			}
-			//printf("%i Bytes sent.\n\n", numbytes);
+			sendbuf = malloc(1024);
+			sprintf(sendbuf, "%s<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>"
+				"<option>modelDescriptionPT2</option>"
+				"</select>", header);
 		}
-		else if (strstr(recvbuf, "GET /simulation/fmu/modelInfoPT2.txt"))
+		else if (strstr(recvbuf, "GET /load?"))
 		{
-			if ((numbytes = send(serverSocket, modelinfo, strlen(modelinfo), 0)) < 0)
+			ptr = recvbuf;
+			*str = 0;
+			getNextDelimiter(&ptr, "?");
+			findNextToken(&ptr, token);
+			if (*ptr != '.')
 			{
-				printf("Senden failed!\n");
-				close(serverSocket);
-				continue;
+				sprintf(str, "%s/", token);
+				findNextToken(&ptr, token);
 			}
-			//printf("%i Bytes sent.\n\n", numbytes);
+			sprintf(str+strlen(str), "%s.", token);
+			findNextToken(&ptr, token);
+			sprintf(str+ strlen(str), "%s", token);
+			genSendBufFromFile(str, &sendbuf);
 		}
-
-		else if (strstr(recvbuf, "GET /simulation/fmu/modelDescriptionPT2.xml"))
-		{
-			if ((numbytes = send(serverSocket, modelDescriptionBuf, strlen(modelDescriptionBuf), 0)) < 0)
-			{
-				printf("Senden failed!\n");
-				close(serverSocket);
-				continue;
-			}
-			//printf("%i Bytes sent.\n\n", numbytes);
-		}
-
-		else if (strstr(recvbuf, "GET /log"))
-		{
-			if ((numbytes = send(serverSocket, logbuf, strlen(logbuf), 0)) < 0)
-			{
-				printf("Senden failed!\n");
-				close(serverSocket);
-				continue;
-			}
-			//printf("%i Bytes sent.\n\n", numbytes);
-		}
-
 		else if (strstr(recvbuf, "POST /sim"))
 		{
 			logfile = fopen("log.txt", "w");
-			postParamOffset = strstr(recvbuf, "projname");
-			token.offset = (int)(postParamOffset - recvbuf);
-			token.len = 0;
+			ptr = strstr(recvbuf, "projname");
+			//printf("%s\n\n", ptr);
 			variables.noOfParam = 0;
 			variables.noOfVars = 0;
-			while (!findNextToken(recvbuf, token.offset + token.len, &token))
+			while (!findNextToken(&ptr, token))
 			{
-				if (!strcmp(token.name, "fmuname"))
+				if (!strcmp(token, "fmuname"))
 				{
-					findNextToken(recvbuf, token.offset + token.len, &token);
-					sprintf(fmuFileName, "%s%s", token.name, ".so");
+					findNextToken(&ptr, token);
+					sprintf(fmuFileName, "%s%s", token, ".so");
 				}
-				else if (!strcmp(token.name, "projname"))
+				else if (!strcmp(token, "projname"))
 				{
-
-					findNextToken(recvbuf, token.offset + token.len, &token);
-					sprintf(resultFileName, "%s%s", token.name, ".txt");
+					findNextToken(&ptr, token);
+					sprintf(resultFileName, "%s%s", token, ".txt");
 				}
-				else if (strstr(token.name, "pname"))
+				else if (!strcmp(token, "pname"))
 				{
-					getNextDelimiter(token.name, &i, "0123456789");
-					sscanf(token.name+i, "%d", &i);
-					printf("index: %d\n\t%s: ", i, token.name);
-					findNextToken(recvbuf, token.offset + token.len, &token);
-					variables.paramNames[i] = malloc(strlen(token.name));
-					strcpy((char*)variables.paramNames[i], token.name);
-					printf("%s\n", variables.paramNames[i]);
+					ptr++;
+					sscanf(ptr, "%d", &i);
+					findNextToken(&ptr, token);
+					variables.paramNames[i] = malloc(strlen(token));
+					strcpy((char*)variables.paramNames[i], token);
 					variables.noOfParam++;
 				}
-				else if (strstr(token.name, "pref"))
+				else if (!strcmp(token, "pref"))
 				{
-					getNextDelimiter(token.name, &i, "0123456789");
-					sscanf(token.name + i, "%d", &i);
-					getNextDelimiter(recvbuf + token.offset + token.len, &i, "=");
-					sscanf(recvbuf + token.offset + token.len + i + 1, "%d", &variables.paramRefs[i]);
-					printf("\t%s = %d\n", token.name, variables.paramRefs[i]);
+					ptr++;
+					sscanf(ptr, "%d", &i);
+					getNextDelimiter(&ptr, "=");
+					ptr++;
+					sscanf(ptr, "%d", &variables.paramRefs[i]);
 				}
-				else if (strstr(token.name, "pval"))
+				else if (!strcmp(token, "pval"))
 				{
-					getNextDelimiter(token.name, &i, "0123456789");
-					sscanf(token.name + i, "%d", &i);
-					getNextDelimiter(recvbuf + token.offset + token.len, &i, "=");
-					sscanf(recvbuf + token.offset + token.len + i + 1, "%lf", &variables.parameter[i]);
-					printf("\t%s = %0.3lf\n", token.name, variables.parameter[i]);
+					ptr++;
+					sscanf(ptr, "%d", &i);
+					getNextDelimiter(&ptr, "=");
+					ptr++;
+					sscanf(ptr, "%lf", &variables.parameter[i]);
 				}
-				else if (strstr(token.name, "vname"))
+				else if (!strcmp(token, "vname"))
 				{
-					getNextDelimiter(token.name, &i, "0123456789");
-					sscanf(token.name + i, "%d", &i);
-					printf("index: %d\n\t%s: ", i, token.name);
-					findNextToken(recvbuf, token.offset + token.len, &token);
-					variables.varNames[i] = malloc(strlen(token.name));
-					strcpy((char*)variables.varNames[i], token.name);
-					printf("%s\n", variables.varNames[i]);
+					ptr++;
+					sscanf(ptr, "%d", &i);
+					findNextTokenLimited(&ptr, token,'&');
+					variables.varNames[i] = malloc(strlen(token));
+					strcpy((char*)variables.varNames[i], token);
 					variables.noOfVars++;
 				}
-				else if (strstr(token.name, "vref"))
+				else if (!strcmp(token, "vref"))
 				{
-					getNextDelimiter(token.name, &i, "0123456789");
-					sscanf(token.name + i, "%d", &i);
-					getNextDelimiter(recvbuf + token.offset + token.len, &i, "=");
-					sscanf(recvbuf + token.offset + token.len + i + 1, "%d", &variables.varRefs[i]);
-					printf("\t%s = %d\n", token.name, variables.varRefs[i]);
+					ptr++;
+					sscanf(ptr, "%d", &i);
+					getNextDelimiter(&ptr, "=");
+					ptr++;
+					sscanf(ptr, "%d", &variables.varRefs[i]);
 				}
 			}
 			sprintf(fmuFullFilePath, "%s%s", fmuPath, fmuFileName);
 			sprintf(resultFullFilePath, "%s%s", resultFilePath, resultFileName);
-			if (initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath) != 0)
+			sendbuf = malloc(5000);
+			strcpy(sendbuf, header);
+			if ( !initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath) )
 			{
-				fclose(logfile);
-				continue;
+				simulate(resultFullFilePath, &variables, sendbuf+strlen(header));
+				sprintf(sendbuf + strlen(sendbuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
+					"<p>Simulation succesfully terminated.</p>", fmuFileName, resultFileName);
 			}
-			simulate(resultFullFilePath, &variables, htmlbuf);
-			fclose(logfile);
-			sprintf(simbuf, "%s%s<p>FMU %s instanciated.</p><p>ResultFilePath: %s</p>"
-				"<p>Simulation succesfully terminated.</p>", header, htmlbuf, fmuFullFilePath, resultFullFilePath);
-			if ((numbytes = send(serverSocket, simbuf, strlen(simbuf), 0)) < 0)
+			else
 			{
-				printf("Senden failed!\n");
-				close(serverSocket);
-				continue;
+				sprintf(sendbuf + strlen(sendbuf), "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
 			}
-			//printf("%i Bytes sent.\n\n", numbytes);
-		}
 			
+			fclose(logfile);
+		}
+		if (!sendbuf) continue;
+		if ((numbytes = send(serverSocket, sendbuf, strlen(sendbuf), 0)) < 0)
+		{
+			printf("Senden failed!\n");
+		}
+		printf("%i Bytes sent.\n\n", numbytes);
+
 		//for (int i = 0; i<DELAY; i++);
 		close(serverSocket);
+		free(sendbuf);
 	}
 
 	close(acceptSocket);
