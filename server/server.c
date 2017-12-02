@@ -52,6 +52,84 @@ static FILE *logfile;
 				return -1;								\
 			}
 
+int genSendBufFromFile(char *filename, char **buf)
+{
+	FILE *file;
+	int filesize;
+
+	file = fopen(filename, "r");
+	fseek(file, 0, SEEK_END);
+	filesize = ftell(file);
+	rewind(file);
+	*buf = (char*)malloc(strlen(header) + filesize + 1);
+	strcpy(*buf, header);
+	fread(*buf + strlen(header), filesize, 1, file);
+	(*buf)[strlen(header) + filesize] = 0;
+	fclose(file);
+
+	return 0;
+}
+
+char getNextDelimiter(char **src, char *delimiter)
+{
+	while (**src != 0)
+	{
+		for (uint32_t i = 0; i < strlen(delimiter); i++)
+		{
+			if (**src == delimiter[i]) return delimiter[i];
+		}
+		(*src)++;
+	}
+
+	return -1;
+}
+
+int findNextTokenLimited(char **src, char *token, char limit)
+{
+	while (**src < 65)
+	{
+		if (**src == 0) return -1;
+		(*src)++;
+	}
+
+	char *start = *src;
+	int len = 0;
+
+	while (**src != limit)
+	{
+		if (**src == 0) return -1;
+		len++;
+		(*src)++;
+	}
+	memcpy(token, start, len);
+	token[len] = 0;
+
+	return 0;
+}
+
+int findNextToken(char **src, char *token)
+{
+	while (**src < 65)
+	{
+		if (**src == 0) return -1;
+		(*src)++;
+	}
+
+	char *start = *src;
+	int len = 0;
+
+	while ((**src >= 48 && **src <= 57) || **src >= 65)
+	{
+		if (**src == 0) return -1;
+		len++;
+		(*src)++;
+	}
+	memcpy(token, start, len);
+	token[len] = 0;
+
+	return 0;
+}
+
 void *allocateMemory(size_t nobj, size_t size)
 {
 	return malloc(nobj*size);
@@ -204,7 +282,7 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 		fwrite(str, 1, strlen(str), result);
 	}
 	fwrite("\n", 1, 1, result);
-
+	
 	while (tComm < tStop && status == fmi2OK)
 	{
 		status = fmi2DoStep(fmuInstance, tComm, tCommStep, fmi2True);
@@ -230,9 +308,13 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 		}
 		fwrite("\n", 1, 1, result);
 	}
-
+	
+	char *ptr = resultFullFilePath;
+	char token[32];
+	getNextDelimiter(&ptr, "/");
+	findNextToken(&ptr, token);
 	sprintf(htmlbuf, "%s", "<table>");
-	sprintf(htmlbuf+strlen(htmlbuf), "<tr><td>%s</td><td>%s</td></tr>", "Projektname", resultFullFilePath);
+	sprintf(htmlbuf+strlen(htmlbuf), "<tr><td>%s</td><td>%s</td></tr>", "Projektname", token);
 	for (i = 0; i < variables->noOfParam; i++)
 	{
 		sprintf(htmlbuf + strlen(htmlbuf), "<tr><td>%s</td><td>%0.3lf</td></tr>", variables->paramNames[i], variables->parameter[i]);
@@ -244,96 +326,11 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 	}
 	sprintf(htmlbuf + strlen(htmlbuf), "</table>");
 
-	if (status == fmi2OK)
-	{
-		fmi2Terminate(fmuInstance);
-		fmi2Reset(fmuInstance);
-		fmi2FreeInstance(fmuInstance);
-	}
-
 	strcpy(str, "Simulation succesfully terminated.\n");
 	fwrite(str, 1, strlen(str), logfile);
 	//printf("%s", str);
 	fclose(result);
 
-	return 0;
-}
-
-int genSendBufFromFile(char *filename, char **buf)
-{
-	FILE *file;
-	int filesize;
-
-	file = fopen(filename, "r");
-	fseek(file, 0, SEEK_END);
-	filesize = ftell(file);
-	rewind(file);
-	*buf = (char*)malloc(strlen(header)+filesize + 1);
-	strcpy(*buf, header);
-	fread(*buf+strlen(header), filesize, 1, file);
-	(*buf)[strlen(header)+filesize] = 0;
-	fclose(file);
-
-	return 0;
-}
-
-char getNextDelimiter(char **src, char *delimiter)
-{
-	while (**src != 0)
-	{
-		for (uint32_t i = 0; i < strlen(delimiter); i++)
-		{
-			if (**src == delimiter[i]) return delimiter[i];
-		}
-		(*src)++;
-	}
-
-	return -1;
-}
-
-int findNextTokenLimited(char **src, char *token, char limit)
-{
-	while (**src < 65)
-	{
-		if (**src == 0) return -1;
-		(*src)++;
-	}
-
-	char *start = *src;
-	int len = 0;
-
-	while (**src!=limit)
-	{
-		if (**src == 0) return -1;
-		len++;
-		(*src)++;
-	}
-	memcpy(token, start, len);
-	token[len] = 0;
-
-	return 0;
-}
-
-int findNextToken(char **src, char *token)
-{
-	while (**src < 65)
-	{
-		if (**src == 0) return -1;
-		(*src)++;
-	}
-	
-	char *start = *src;
-	int len = 0;
-
-	while ((**src >= 48 && **src <= 57) || **src >= 65)
-	{
-		if (**src == 0) return -1;
-		len++;
-		(*src)++;
-	}
-	memcpy(token, start, len);
-	token[len] = 0;
-	
 	return 0;
 }
 
@@ -360,6 +357,7 @@ int main(int argc, char *argv[])
 	fmi2String guid = "{8c4e810f-3df3-4a00-8276-176fa3c9f9e0}";
 	fmi2String fmuResourcesLocation = NULL;
 	char *ptr;
+	fmi2Status status;
 
 	printf("Web FMU Server\n\n");
 
@@ -409,21 +407,23 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		recvbuf[numbytes] = 0;
-		printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
+		//printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
 
 		if (strstr(recvbuf, "GET / HTTP/1.1"))
 		{
-			genSendBufFromFile("index.html", &sendbuf);
+			genSendBufFromFile("sites/index.html", &sendbuf);
 		}
 		else if (strstr(recvbuf, "GET /style.css"))
 		{
-			genSendBufFromFile("style.css", &sendbuf);
+			genSendBufFromFile("sites/style.css", &sendbuf);
 		}
 		else if (strstr(recvbuf, "GET /modelmenu"))
 		{
 			sendbuf = malloc(1024);
 			sprintf(sendbuf, "%s<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>"
+				"<option>modelDescriptionPT1</option>"
 				"<option>modelDescriptionPT2</option>"
+				"<option>modelDescriptionWurf</option>"
 				"</select>", header);
 		}
 		else if (strstr(recvbuf, "GET /load?"))
@@ -512,7 +512,10 @@ int main(int argc, char *argv[])
 			{
 				simulate(resultFullFilePath, &variables, sendbuf+strlen(header));
 				sprintf(sendbuf + strlen(sendbuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
-					"<p>Simulation succesfully terminated.</p>", fmuFileName, resultFileName);
+					"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
+				//fmi2Terminate(fmuInstance);
+				//fmi2Reset(fmuInstance);
+				fmi2FreeInstance(fmuInstance);
 			}
 			else
 			{
@@ -526,7 +529,7 @@ int main(int argc, char *argv[])
 		{
 			printf("Senden failed!\n");
 		}
-		printf("%i Bytes sent.\n\n", numbytes);
+		//printf("%i Bytes sent.\n\n", numbytes);
 
 		//for (int i = 0; i<DELAY; i++);
 		close(serverSocket);
