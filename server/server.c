@@ -395,7 +395,7 @@ int main(int argc, char *argv[])
 	{
 		sendbuf = NULL;
 		sprintf(header, "%s\r\n", http_protocol);
-		//printf("Wait for connection...\n\n");
+		printf("Wait for connection...\n\n");
 		serverSocket = accept(acceptSocket, NULL, NULL);
 		if (serverSocket<0)
 		{
@@ -403,7 +403,7 @@ int main(int argc, char *argv[])
 			close(acceptSocket);
 			return 1;
 		}
-		//printf("Connection accepted.\n\n");
+		printf("Connection accepted.\n\nreceiving...\n\n");
 		
 		if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
 		{
@@ -424,6 +424,9 @@ int main(int argc, char *argv[])
 		}
 		else if (strstr(recvbuf, "GET /favicon"))
 		{
+			//sendbuf = malloc(64);
+			//strcpy(sendbuf, "HTTP/1.1 205 Reset Content\r\n\r\n");
+			//sendbuflen = strlen(sendbuf);
 			sprintf(header, "%s%s\r\n", http_protocol, "Content-Type: image/apng\r\n");
 			genSendBufFromFile("FMU_32x32.png", &sendbuflen, &sendbuf, "rb");
 		}
