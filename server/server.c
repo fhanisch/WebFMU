@@ -12,7 +12,6 @@
 #include "fmi2FunctionTypes.h"
 
 #define FALSE 0
-#define DELAY 100000
 
 #define FMI_GET_FUNC_ADDR( fun )						\
 			fun = (fun##TYPE*)dlsym(handle, #fun);		\
@@ -589,7 +588,6 @@ int main(int argc, char *argv[])
 		}
 		printf("%i Bytes sent.\n\n", numbytes);
 
-		//for (int i = 0; i<DELAY; i++);
 		close(serverSocket);
 		free(sendbuf);
 	}
