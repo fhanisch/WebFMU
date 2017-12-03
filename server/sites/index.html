@@ -28,9 +28,9 @@
       <div id="err"></div>
       <p>
         <a href=".">Neu</a>
-        <a href="/simulation/data">Daten</a>
-        <a href="model_parameter.html">Model Paramter</a>
-        <a href="/simulation/fmu/modelDescription.xml">ModelDescription</a>
+        <a href="data">Daten</a>
+        <a href="load?sites/model_parameter.html">Model Paramter</a>
+        <a id="modelDescr" href="tbd">ModelDescription</a>
         <a href="load?log.txt">Log</a>
       </p>
     </main>
@@ -49,6 +49,8 @@
           var options = document.getElementById("modelSelection").options;
           getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
           showModelDescription(options[selectedIndex].text);
+          var modelDescr = document.getElementById("modelDescr");
+          modelDescr.setAttribute("href","load?fmu/" + options[selectedIndex].text + ".xml");
         }
       };
       xhttp.open("GET", "modelmenu.php", true);
@@ -60,6 +62,8 @@
         var options = document.getElementById("modelSelection").options;
         getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
         showModelDescription(options[selectedIndex].text);
+        var modelDescr = document.getElementById("modelDescr");
+        modelDescr.setAttribute("href","load?fmu/" + options[selectedIndex].text + ".xml");
         document.getElementById("sim").innerHTML = "";
       }
 

@@ -8,10 +8,21 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <dirent.h>
 #include "fmi2FunctionTypes.h"
 
 #define FALSE 0
 #define DELAY 100000
+
+#define FMI_GET_FUNC_ADDR( fun )						\
+			fun = (fun##TYPE*)dlsym(handle, #fun);		\
+			if (fun == NULL)							\
+			{											\
+				sprintf(str,"Load %s failed!\n",#fun);	\
+				fwrite(str, 1, strlen(str), logfile);	\
+				return -1;								\
+			}
+
 typedef int bool;
 
 typedef struct
@@ -42,33 +53,6 @@ fmi2ResetTYPE *fmi2Reset;
 fmi2FreeInstanceTYPE *fmi2FreeInstance;
 static fmi2Component fmuInstance;
 static FILE *logfile;
-
-#define FMI_GET_FUNC_ADDR( fun )						\
-			fun = (fun##TYPE*)dlsym(handle, #fun);		\
-			if (fun == NULL)							\
-			{											\
-				sprintf(str,"Load %s failed!\n",#fun);	\
-				fwrite(str, 1, strlen(str), logfile);	\
-				return -1;								\
-			}
-
-int genSendBufFromFile(char *filename, char **buf)
-{
-	FILE *file;
-	int filesize;
-
-	file = fopen(filename, "r");
-	fseek(file, 0, SEEK_END);
-	filesize = ftell(file);
-	rewind(file);
-	*buf = (char*)malloc(strlen(header) + filesize + 1);
-	strcpy(*buf, header);
-	fread(*buf + strlen(header), filesize, 1, file);
-	(*buf)[strlen(header) + filesize] = 0;
-	fclose(file);
-
-	return 0;
-}
 
 char getNextDelimiter(char **src, char *delimiter)
 {
@@ -334,6 +318,25 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 	return 0;
 }
 
+int genSendBufFromFile(char *filename, int *bufsize, char **buf, char *readMode)
+{
+	FILE *file;
+	int filesize;
+
+	file = fopen(filename, readMode);
+	fseek(file, 0, SEEK_END);
+	filesize = ftell(file);
+	rewind(file);
+	*bufsize = strlen(header) + filesize;
+	*buf = (char*)malloc(*bufsize + 1);
+	strcpy(*buf, header);
+	fread(*buf + strlen(header), filesize, 1, file);
+	(*buf)[*bufsize] = 0;
+	fclose(file);
+
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	int acceptSocket, serverSocket;
@@ -343,6 +346,7 @@ int main(int argc, char *argv[])
 	char str[128];
 	char recvbuf[1024];
 	char *sendbuf;
+	int sendbuflen;
 	int numbytes;
 	int i;
 	char fmuPath[] = "fmu/";
@@ -357,7 +361,6 @@ int main(int argc, char *argv[])
 	fmi2String guid = "{8c4e810f-3df3-4a00-8276-176fa3c9f9e0}";
 	fmi2String fmuResourcesLocation = NULL;
 	char *ptr;
-	fmi2Status status;
 
 	printf("Web FMU Server\n\n");
 
@@ -400,7 +403,7 @@ int main(int argc, char *argv[])
 		}
 		//printf("Connection accepted.\n\n");
 		
-		if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 0)
+		if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
 		{
 			printf("receiving failed!\n");
 			close(serverSocket);
@@ -411,20 +414,44 @@ int main(int argc, char *argv[])
 
 		if (strstr(recvbuf, "GET / HTTP/1.1"))
 		{
-			genSendBufFromFile("sites/index.html", &sendbuf);
+			genSendBufFromFile("sites/index.html", &sendbuflen, &sendbuf, "r");
 		}
 		else if (strstr(recvbuf, "GET /style.css"))
 		{
-			genSendBufFromFile("sites/style.css", &sendbuf);
+			genSendBufFromFile("sites/style.css", &sendbuflen, &sendbuf, "r");
+		}
+		else if (strstr(recvbuf, "GET /favicon"))
+		{
+			genSendBufFromFile("FMU_32x32.png", &sendbuflen, &sendbuf, "rb");
 		}
 		else if (strstr(recvbuf, "GET /modelmenu"))
 		{
+			DIR *dp;
+			struct dirent *ep;
+			char fmuName[128];
+			char token[128];
+			char *ptr;
+
 			sendbuf = malloc(1024);
-			sprintf(sendbuf, "%s<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>"
-				"<option>modelDescriptionPT1</option>"
-				"<option>modelDescriptionPT2</option>"
-				"<option>modelDescriptionWurf</option>"
-				"</select>", header);
+			sprintf(sendbuf, "%s<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>", header);
+
+			dp = opendir("fmu");
+			if (dp != NULL)
+			{
+				while (ep = readdir(dp))
+				{
+					ptr = ep->d_name;
+					findNextToken(&ptr, fmuName);
+					findNextToken(&ptr, token);
+					if (!strcmp(token, "xml")) sprintf(sendbuf + strlen(sendbuf), "<option>%s</option>", fmuName);
+				}
+				(void)closedir(dp);
+			}
+			else
+				printf("Couldn't open the directory!\n");
+
+			sprintf(sendbuf + strlen(sendbuf), "</select>");
+			sendbuflen = strlen(sendbuf);
 		}
 		else if (strstr(recvbuf, "GET /load?"))
 		{
@@ -440,7 +467,7 @@ int main(int argc, char *argv[])
 			sprintf(str+strlen(str), "%s.", token);
 			findNextToken(&ptr, token);
 			sprintf(str+ strlen(str), "%s", token);
-			genSendBufFromFile(str, &sendbuf);
+			genSendBufFromFile(str, &sendbuflen, &sendbuf, "r");
 		}
 		else if (strstr(recvbuf, "POST /sim"))
 		{
@@ -521,11 +548,17 @@ int main(int argc, char *argv[])
 			{
 				sprintf(sendbuf + strlen(sendbuf), "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
 			}
-			
+			sendbuflen = strlen(sendbuf);
 			fclose(logfile);
 		}
+		else
+		{
+			sendbuf = malloc(128);
+			sprintf(sendbuf,"%s<p>What!</p>", header);
+			sendbuflen = strlen(sendbuf);
+		}
 		if (!sendbuf) continue;
-		if ((numbytes = send(serverSocket, sendbuf, strlen(sendbuf), 0)) < 0)
+		if ((numbytes = send(serverSocket, sendbuf, sendbuflen, 0)) < 1)
 		{
 			printf("Senden failed!\n");
 		}
