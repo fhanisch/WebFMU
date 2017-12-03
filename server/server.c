@@ -424,9 +424,6 @@ int main(int argc, char *argv[])
 		}
 		else if (strstr(recvbuf, "GET /favicon"))
 		{
-			//sendbuf = malloc(64);
-			//strcpy(sendbuf, "HTTP/1.1 205 Reset Content\r\n\r\n");
-			//sendbuflen = strlen(sendbuf);
 			sprintf(header, "%s%s\r\n", http_protocol, "Content-Type: image/apng\r\n");
 			genSendBufFromFile("FMU_32x32.png", &sendbuflen, &sendbuf, "rb");
 		}
@@ -580,6 +577,7 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
+			printf("No Content!\n");
 			sendbuf = malloc(128);
 			sprintf(sendbuf, "%s<p style='font-size:100px;text-align:center'>What!</p>", header);
 			sendbuflen = strlen(sendbuf);
