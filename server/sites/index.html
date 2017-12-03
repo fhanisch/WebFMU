@@ -2,7 +2,7 @@
 <html lang="de">
 
   <head>
-    <title>Simulation</title>
+    <title>WebFMU - Simulation</title>
     <meta charset="utf-8">
     <link rel="stylesheet" href="style.css"/>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
@@ -29,10 +29,11 @@
       <p>
         <a href=".">Neu</a>
         <a href="data">Daten</a>
-        <a href="load?sites/model_parameter.html">Model Paramter</a>
+        <a id="linkModelParam" href="tbd">Model Paramter</a>
         <a id="modelDescr" href="tbd">ModelDescription</a>
         <a href="load?log.txt">Log</a>
       </p>
+      <img src="logo" style="width:25%"/>
     </main>
 
     <footer>
@@ -51,9 +52,11 @@
           showModelDescription(options[selectedIndex].text);
           var modelDescr = document.getElementById("modelDescr");
           modelDescr.setAttribute("href","load?fmu/" + options[selectedIndex].text + ".xml");
+          var linkModelParam = document.getElementById("linkModelParam");
+          linkModelParam.setAttribute("href","load?sites/model_parameter.html&" + options[selectedIndex].text);
         }
       };
-      xhttp.open("GET", "modelmenu.php", true);
+      xhttp.open("GET", "modelmenu", true);
       xhttp.send();
 
       function changeSelection()
@@ -64,6 +67,8 @@
         showModelDescription(options[selectedIndex].text);
         var modelDescr = document.getElementById("modelDescr");
         modelDescr.setAttribute("href","load?fmu/" + options[selectedIndex].text + ".xml");
+        var linkModelParam = document.getElementById("linkModelParam");
+        linkModelParam.setAttribute("href","load?sites/model_parameter.html&" + options[selectedIndex].text);
         document.getElementById("sim").innerHTML = "";
       }
 

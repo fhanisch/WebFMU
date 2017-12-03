@@ -37,7 +37,8 @@ typedef struct
 	fmi2String varNames[100];
 } Variables;
 
-const char header[] = "HTTP/1.1 200 OK\r\n\r\n";
+char header[512];
+const char http_protocol[] = "HTTP/1.1 200 OK\r\nServer: WebFMU Server\r\n";
 
 static void *handle;
 fmi2GetVersionTYPE *fmi2GetVersion;
@@ -355,6 +356,7 @@ int main(int argc, char *argv[])
 	char resultFilePath[] = "data/";
 	char resultFileName[64];
 	char resultFullFilePath[128];
+	char linkModelParam[64];
 	Variables variables;
 	char token[256];
 	fmi2String instanceName = "WebFMU";
@@ -393,6 +395,7 @@ int main(int argc, char *argv[])
 	while (!quit)
 	{
 		sendbuf = NULL;
+		sprintf(header, "%s\r\n", http_protocol);
 		//printf("Wait for connection...\n\n");
 		serverSocket = accept(acceptSocket, NULL, NULL);
 		if (serverSocket<0)
@@ -410,7 +413,7 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		recvbuf[numbytes] = 0;
-		//printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
+		printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
 
 		if (strstr(recvbuf, "GET / HTTP/1.1"))
 		{
@@ -422,7 +425,18 @@ int main(int argc, char *argv[])
 		}
 		else if (strstr(recvbuf, "GET /favicon"))
 		{
+			sprintf(header, "%s%s\r\n", http_protocol, "Content-Type: image/apng\r\n");
 			genSendBufFromFile("FMU_32x32.png", &sendbuflen, &sendbuf, "rb");
+		}
+		else if (strstr(recvbuf, "GET /logo"))
+		{
+			sprintf(header, "%s%s\r\n", http_protocol, "Content-Type: image/svg+xml\r\n");
+			genSendBufFromFile("FMU.svg", &sendbuflen, &sendbuf, "r");
+		}
+		else if (strstr(recvbuf, "GET /modelparameter"))
+		{
+			sprintf(str, "fmu/%s.xml", linkModelParam);
+			genSendBufFromFile(str, &sendbuflen, &sendbuf, "r");
 		}
 		else if (strstr(recvbuf, "GET /modelmenu"))
 		{
@@ -467,6 +481,10 @@ int main(int argc, char *argv[])
 			sprintf(str+strlen(str), "%s.", token);
 			findNextToken(&ptr, token);
 			sprintf(str+ strlen(str), "%s", token);
+			if (getNextDelimiter(&ptr, "&/") == '&')
+			{
+				findNextToken(&ptr, linkModelParam);
+			}
 			genSendBufFromFile(str, &sendbuflen, &sendbuf, "r");
 		}
 		else if (strstr(recvbuf, "POST /sim"))
@@ -537,12 +555,19 @@ int main(int argc, char *argv[])
 			strcpy(sendbuf, header);
 			if ( !initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath) )
 			{
-				simulate(resultFullFilePath, &variables, sendbuf+strlen(header));
-				sprintf(sendbuf + strlen(sendbuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
-					"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
+				if (!simulate(resultFullFilePath, &variables, sendbuf + strlen(header)))
+				{
+					sprintf(sendbuf + strlen(sendbuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
+						"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
+				}
+				else
+				{
+					strcat(sendbuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
+				}
 				//fmi2Terminate(fmuInstance);
 				//fmi2Reset(fmuInstance);
 				fmi2FreeInstance(fmuInstance);
+				dlclose (handle);
 			}
 			else
 			{
@@ -554,7 +579,7 @@ int main(int argc, char *argv[])
 		else
 		{
 			sendbuf = malloc(128);
-			sprintf(sendbuf,"%s<p>What!</p>", header);
+			sprintf(sendbuf, "%s<p style='font-size:100px;text-align:center'>What!</p>", header);
 			sendbuflen = strlen(sendbuf);
 		}
 		if (!sendbuf) continue;
@@ -562,7 +587,7 @@ int main(int argc, char *argv[])
 		{
 			printf("Senden failed!\n");
 		}
-		//printf("%i Bytes sent.\n\n", numbytes);
+		printf("%i Bytes sent.\n\n", numbytes);
 
 		//for (int i = 0; i<DELAY; i++);
 		close(serverSocket);
