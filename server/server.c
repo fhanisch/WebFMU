@@ -37,7 +37,10 @@ typedef struct
 } Variables;
 
 char header[512];
-const char http_protocol[] = "HTTP/1.1 200 OK\r\nServer: WebFMU Server\r\n";
+const char http_protocol[] =	"HTTP/1.1 200 OK\r\n"
+								"Server: WebFMU Server\r\n"
+								"Content-Length: %d\r\n"
+								"Content-Type: %s\r\n\r\n";
 
 static void *handle;
 fmi2GetVersionTYPE *fmi2GetVersion;
@@ -318,20 +321,17 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 	return 0;
 }
 
-int genSendBufFromFile(char *filename, int *bufsize, char **buf, char *readMode)
+int readFile(char *filename, int *dataSize, char **data, char *readMode)
 {
 	FILE *file;
-	int filesize;
 
 	file = fopen(filename, readMode);
 	fseek(file, 0, SEEK_END);
-	filesize = ftell(file);
+	*dataSize = ftell(file);
 	rewind(file);
-	*bufsize = strlen(header) + filesize;
-	*buf = (char*)malloc(*bufsize + 1);
-	strcpy(*buf, header);
-	fread(*buf + strlen(header), filesize, 1, file);
-	(*buf)[*bufsize] = 0;
+	*data = malloc(*dataSize + 1);
+	fread(*data, *dataSize, 1, file);
+	(*data)[*dataSize] = 0;
 	fclose(file);
 
 	return 0;
@@ -346,7 +346,9 @@ int main(int argc, char *argv[])
 	char str[128];
 	char recvbuf[1024];
 	char *sendbuf;
+	char *databuf;
 	int sendbuflen;
+	int databuflen;
 	int numbytes;
 	int i;
 	char fmuPath[] = "fmu/";
@@ -393,8 +395,7 @@ int main(int argc, char *argv[])
 
 	while (!quit)
 	{
-		sendbuf = NULL;
-		sprintf(header, "%s\r\n", http_protocol);
+		databuf = NULL;
 		printf("Wait for connection...\n\n");
 		serverSocket = accept(acceptSocket, NULL, NULL);
 		if (serverSocket<0)
@@ -416,26 +417,29 @@ int main(int argc, char *argv[])
 
 		if (strstr(recvbuf, "GET / HTTP/1.1"))
 		{
-			genSendBufFromFile("sites/index.html", &sendbuflen, &sendbuf, "r");
+			readFile("sites/index.html", &databuflen, &databuf, "r");
+			sprintf(header, http_protocol, databuflen, "text/html");
 		}
 		else if (strstr(recvbuf, "GET /style.css"))
 		{
-			genSendBufFromFile("sites/style.css", &sendbuflen, &sendbuf, "r");
+			readFile("sites/style.css", &databuflen, &databuf, "r");
+			sprintf(header, http_protocol, databuflen, "text/css");
 		}
 		else if (strstr(recvbuf, "GET /favicon"))
 		{
-			sprintf(header, "%s%s\r\n", http_protocol, "Content-Type: image/apng\r\n");
-			genSendBufFromFile("FMU_32x32.png", &sendbuflen, &sendbuf, "rb");
+			readFile("FMU_32x32.png", &databuflen, &databuf, "rb");
+			sprintf(header, http_protocol, databuflen, "image/apng");
 		}
 		else if (strstr(recvbuf, "GET /logo"))
 		{
-			sprintf(header, "%s%s\r\n", http_protocol, "Content-Type: image/svg+xml\r\n");
-			genSendBufFromFile("FMU.svg", &sendbuflen, &sendbuf, "r");
+			readFile("FMU.svg", &databuflen, &databuf, "r");
+			sprintf(header, http_protocol, databuflen, "image/svg+xml");
 		}
 		else if (strstr(recvbuf, "GET /modelparameter"))
 		{
 			sprintf(str, "fmu/%s.xml", linkModelParam);
-			genSendBufFromFile(str, &sendbuflen, &sendbuf, "r");
+			readFile(str, &databuflen, &databuf, "r");
+			sprintf(header, http_protocol, databuflen, "text/xml");
 		}
 		else if (strstr(recvbuf, "GET /modelmenu"))
 		{
@@ -445,8 +449,8 @@ int main(int argc, char *argv[])
 			char token[128];
 			char *ptr;
 
-			sendbuf = malloc(1024);
-			sprintf(sendbuf, "%s<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>", header);
+			databuf = malloc(1024);
+			strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
 
 			dp = opendir("fmu");
 			if (dp != NULL)
@@ -456,15 +460,16 @@ int main(int argc, char *argv[])
 					ptr = ep->d_name;
 					findNextToken(&ptr, fmuName);
 					findNextToken(&ptr, token);
-					if (!strcmp(token, "xml")) sprintf(sendbuf + strlen(sendbuf), "<option>%s</option>", fmuName);
+					if (!strcmp(token, "xml")) sprintf(databuf + strlen(databuf), "<option>%s</option>", fmuName);
 				}
 				(void)closedir(dp);
 			}
 			else
 				printf("Couldn't open the directory!\n");
 
-			sprintf(sendbuf + strlen(sendbuf), "</select>");
-			sendbuflen = strlen(sendbuf);
+			sprintf(databuf + strlen(databuf), "</select>");
+			databuflen = strlen(databuf);
+			sprintf(header, http_protocol, databuflen, "text/html");
 		}
 		else if (strstr(recvbuf, "GET /load?"))
 		{
@@ -484,13 +489,15 @@ int main(int argc, char *argv[])
 			{
 				findNextToken(&ptr, linkModelParam);
 			}
-			genSendBufFromFile(str, &sendbuflen, &sendbuf, "r");
+			readFile(str, &databuflen, &databuf, "r");
+			if (strstr(str,"xml")) sprintf(header, http_protocol, databuflen, "text/xml");
+			else if (strstr(str, "txt")) sprintf(header, http_protocol, databuflen, "text/plain");
+			else sprintf(header, http_protocol, databuflen, "text/html");
 		}
 		else if (strstr(recvbuf, "POST /sim"))
 		{
 			logfile = fopen("log.txt", "w");
 			ptr = strstr(recvbuf, "projname");
-			//printf("%s\n\n", ptr);
 			variables.noOfParam = 0;
 			variables.noOfVars = 0;
 			while (!findNextToken(&ptr, token))
@@ -550,18 +557,17 @@ int main(int argc, char *argv[])
 			}
 			sprintf(fmuFullFilePath, "%s%s", fmuPath, fmuFileName);
 			sprintf(resultFullFilePath, "%s%s", resultFilePath, resultFileName);
-			sendbuf = malloc(5000);
-			strcpy(sendbuf, header);
+			databuf = malloc(5000);
 			if ( !initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath) )
 			{
-				if (!simulate(resultFullFilePath, &variables, sendbuf + strlen(header)))
+				if (!simulate(resultFullFilePath, &variables, databuf))
 				{
-					sprintf(sendbuf + strlen(sendbuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
+					sprintf(databuf + strlen(databuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
 						"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
 				}
 				else
 				{
-					strcat(sendbuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
+					strcat(databuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
 				}
 				//fmi2Terminate(fmuInstance);
 				//fmi2Reset(fmuInstance);
@@ -570,19 +576,27 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				sprintf(sendbuf + strlen(sendbuf), "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
+				sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
 			}
-			sendbuflen = strlen(sendbuf);
+			databuflen = strlen(databuf);
+			sprintf(header, http_protocol, databuflen, "text/html");
 			fclose(logfile);
 		}
 		else
 		{
 			printf("No Content!\n");
-			sendbuf = malloc(128);
-			sprintf(sendbuf, "%s<p style='font-size:100px;text-align:center'>What!</p>", header);
-			sendbuflen = strlen(sendbuf);
+			databuf = malloc(128);
+			strcpy(databuf, "<p style='font-size:100px;text-align:center'>What!</p>");
+			databuflen = strlen(databuf);
+			sprintf(header, http_protocol, databuflen, "text/html");
 		}
-		if (!sendbuf) continue;
+		if (!databuf) continue;
+		//printf("Header:\n%s\n\n", header);
+		sendbuflen = strlen(header) + databuflen;
+		sendbuf = malloc(sendbuflen);
+		strcpy(sendbuf, header);
+		memcpy(sendbuf + strlen(header), databuf, databuflen);
+		//printf("sendbuf:\n%s\n\n", sendbuf);
 		if ((numbytes = send(serverSocket, sendbuf, sendbuflen, 0)) < 1)
 		{
 			printf("Senden failed!\n");
@@ -591,6 +605,7 @@ int main(int argc, char *argv[])
 
 		close(serverSocket);
 		free(sendbuf);
+		free(databuf);
 	}
 
 	close(acceptSocket);
