@@ -12,6 +12,8 @@
 #include "fmi2FunctionTypes.h"
 
 #define FALSE 0
+#define TRUE 1
+#define PERSISTENT_CONNECTION TRUE
 
 #define FMI_GET_FUNC_ADDR( fun )						\
 			fun = (fun##TYPE*)dlsym(handle, #fun);		\
@@ -342,7 +344,8 @@ int main(int argc, char *argv[])
 	int acceptSocket, serverSocket;
 	struct sockaddr_in addr;
 	int port = 80;
-	bool quit = FALSE;
+	bool quitServer = FALSE;
+	bool quitConnection;
 	char str[128];
 	char recvbuf[1024];
 	char *sendbuf;
@@ -393,9 +396,8 @@ int main(int argc, char *argv[])
 
 	printf("Server started ...\n");
 
-	while (!quit)
+	while (!quitServer)
 	{
-		databuf = NULL;
 		printf("Wait for connection...\n\n");
 		serverSocket = accept(acceptSocket, NULL, NULL);
 		if (serverSocket<0)
@@ -404,208 +406,225 @@ int main(int argc, char *argv[])
 			close(acceptSocket);
 			return 1;
 		}
-		printf("Connection accepted.\n\nreceiving...\n\n");
-		
-		if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
-		{
-			printf("receiving failed!\n");
-			close(serverSocket);
-			continue;
-		}
-		recvbuf[numbytes] = 0;
-		printf("%i bytes received:\n%s\n\n", numbytes, recvbuf);
+		printf("Connection accepted.\n\n");
 
-		if (strstr(recvbuf, "GET / HTTP/1.1"))
+		quitConnection = FALSE;
+		while (!quitConnection || PERSISTENT_CONNECTION)
 		{
-			readFile("sites/index.html", &databuflen, &databuf, "r");
-			sprintf(header, http_protocol, databuflen, "text/html");
-		}
-		else if (strstr(recvbuf, "GET /style.css"))
-		{
-			readFile("sites/style.css", &databuflen, &databuf, "r");
-			sprintf(header, http_protocol, databuflen, "text/css");
-		}
-		else if (strstr(recvbuf, "GET /favicon"))
-		{
-			readFile("FMU_32x32.png", &databuflen, &databuf, "rb");
-			sprintf(header, http_protocol, databuflen, "image/apng");
-		}
-		else if (strstr(recvbuf, "GET /logo"))
-		{
-			readFile("FMU.svg", &databuflen, &databuf, "r");
-			sprintf(header, http_protocol, databuflen, "image/svg+xml");
-		}
-		else if (strstr(recvbuf, "GET /modelparameter"))
-		{
-			sprintf(str, "fmu/%s.xml", linkModelParam);
-			readFile(str, &databuflen, &databuf, "r");
-			sprintf(header, http_protocol, databuflen, "text/xml");
-		}
-		else if (strstr(recvbuf, "GET /modelmenu"))
-		{
-			DIR *dp;
-			struct dirent *ep;
-			char fmuName[128];
-			char token[128];
-			char *ptr;
-
-			databuf = malloc(1024);
-			strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
-
-			dp = opendir("fmu");
-			if (dp != NULL)
+			databuf = NULL;
+			printf("receiving...\n\n");
+			if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
 			{
-				while (ep = readdir(dp))
-				{
-					ptr = ep->d_name;
-					findNextToken(&ptr, fmuName);
-					findNextToken(&ptr, token);
-					if (!strcmp(token, "xml")) sprintf(databuf + strlen(databuf), "<option>%s</option>", fmuName);
-				}
-				(void)closedir(dp);
+				printf("receiving failed!\n");
+				quitConnection = TRUE;
+				break;
 			}
-			else
-				printf("Couldn't open the directory!\n");
+			recvbuf[numbytes] = 0;
+			printf("%d bytes received:\n%s\n\n", numbytes, recvbuf);
 
-			sprintf(databuf + strlen(databuf), "</select>");
-			databuflen = strlen(databuf);
-			sprintf(header, http_protocol, databuflen, "text/html");
-		}
-		else if (strstr(recvbuf, "GET /load?"))
-		{
-			ptr = recvbuf;
-			*str = 0;
-			getNextDelimiter(&ptr, "?");
-			findNextToken(&ptr, token);
-			if (*ptr != '.')
+			if (strstr(recvbuf, "GET / HTTP/1.1"))
 			{
-				sprintf(str, "%s/", token);
+				readFile("sites/index.html", &databuflen, &databuf, "r");
+				sprintf(header, http_protocol, databuflen, "text/html");
+			}
+			else if (strstr(recvbuf, "GET /style.css"))
+			{
+				readFile("sites/style.css", &databuflen, &databuf, "r");
+				sprintf(header, http_protocol, databuflen, "text/css");
+			}
+			else if (strstr(recvbuf, "GET /favicon"))
+			{
+				readFile("FMU_32x32.png", &databuflen, &databuf, "rb");
+				sprintf(header, http_protocol, databuflen, "image/apng");
+			}
+			else if (strstr(recvbuf, "GET /logo"))
+			{
+				readFile("FMU.svg", &databuflen, &databuf, "r");
+				sprintf(header, http_protocol, databuflen, "image/svg+xml");
+			}
+			else if (strstr(recvbuf, "GET /modelparameter"))
+			{
+				sprintf(str, "fmu/%s.xml", linkModelParam);
+				readFile(str, &databuflen, &databuf, "r");
+				sprintf(header, http_protocol, databuflen, "text/xml");
+			}
+			else if (strstr(recvbuf, "GET /?quit"))
+			{
+				printf("Server quitted!\n");
+				quitConnection = TRUE;
+				quitServer = TRUE;
+				break;
+			}
+			else if (strstr(recvbuf, "GET /modelmenu"))
+			{
+				DIR *dp;
+				struct dirent *ep;
+				char fmuName[128];
+				char token[128];
+				char *ptr;
+
+				databuf = malloc(1024);
+				strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
+
+				dp = opendir("fmu");
+				if (dp != NULL)
+				{
+					while (ep = readdir(dp))
+					{
+						ptr = ep->d_name;
+						findNextToken(&ptr, fmuName);
+						findNextToken(&ptr, token);
+						if (!strcmp(token, "xml")) sprintf(databuf + strlen(databuf), "<option>%s</option>", fmuName);
+					}
+					(void)closedir(dp);
+				}
+				else
+					printf("Couldn't open the directory!\n");
+
+				sprintf(databuf + strlen(databuf), "</select>");
+				databuflen = strlen(databuf);
+				sprintf(header, http_protocol, databuflen, "text/html");
+			}
+			else if (strstr(recvbuf, "GET /load?"))
+			{
+				ptr = recvbuf;
+				*str = 0;
+				getNextDelimiter(&ptr, "?");
 				findNextToken(&ptr, token);
-			}
-			sprintf(str+strlen(str), "%s.", token);
-			findNextToken(&ptr, token);
-			sprintf(str+ strlen(str), "%s", token);
-			if (getNextDelimiter(&ptr, "&/") == '&')
-			{
-				findNextToken(&ptr, linkModelParam);
-			}
-			readFile(str, &databuflen, &databuf, "r");
-			if (strstr(str,"xml")) sprintf(header, http_protocol, databuflen, "text/xml");
-			else if (strstr(str, "txt")) sprintf(header, http_protocol, databuflen, "text/plain");
-			else sprintf(header, http_protocol, databuflen, "text/html");
-		}
-		else if (strstr(recvbuf, "POST /sim"))
-		{
-			logfile = fopen("log.txt", "w");
-			ptr = strstr(recvbuf, "projname");
-			variables.noOfParam = 0;
-			variables.noOfVars = 0;
-			while (!findNextToken(&ptr, token))
-			{
-				if (!strcmp(token, "fmuname"))
+				if (*ptr != '.')
 				{
+					sprintf(str, "%s/", token);
 					findNextToken(&ptr, token);
-					sprintf(fmuFileName, "%s%s", token, ".so");
 				}
-				else if (!strcmp(token, "projname"))
+				sprintf(str + strlen(str), "%s.", token);
+				findNextToken(&ptr, token);
+				sprintf(str + strlen(str), "%s", token);
+				if (getNextDelimiter(&ptr, "&/") == '&')
 				{
-					findNextToken(&ptr, token);
-					sprintf(resultFileName, "%s%s", token, ".txt");
+					findNextToken(&ptr, linkModelParam);
 				}
-				else if (!strcmp(token, "pname"))
-				{
-					ptr++;
-					sscanf(ptr, "%d", &i);
-					findNextToken(&ptr, token);
-					variables.paramNames[i] = malloc(strlen(token));
-					strcpy((char*)variables.paramNames[i], token);
-					variables.noOfParam++;
-				}
-				else if (!strcmp(token, "pref"))
-				{
-					ptr++;
-					sscanf(ptr, "%d", &i);
-					getNextDelimiter(&ptr, "=");
-					ptr++;
-					sscanf(ptr, "%d", &variables.paramRefs[i]);
-				}
-				else if (!strcmp(token, "pval"))
-				{
-					ptr++;
-					sscanf(ptr, "%d", &i);
-					getNextDelimiter(&ptr, "=");
-					ptr++;
-					sscanf(ptr, "%lf", &variables.parameter[i]);
-				}
-				else if (!strcmp(token, "vname"))
-				{
-					ptr++;
-					sscanf(ptr, "%d", &i);
-					findNextTokenLimited(&ptr, token,'&');
-					variables.varNames[i] = malloc(strlen(token));
-					strcpy((char*)variables.varNames[i], token);
-					variables.noOfVars++;
-				}
-				else if (!strcmp(token, "vref"))
-				{
-					ptr++;
-					sscanf(ptr, "%d", &i);
-					getNextDelimiter(&ptr, "=");
-					ptr++;
-					sscanf(ptr, "%d", &variables.varRefs[i]);
-				}
+				readFile(str, &databuflen, &databuf, "r");
+				if (strstr(str, "xml")) sprintf(header, http_protocol, databuflen, "text/xml");
+				else if (strstr(str, "txt")) sprintf(header, http_protocol, databuflen, "text/plain");
+				else sprintf(header, http_protocol, databuflen, "text/html");
 			}
-			sprintf(fmuFullFilePath, "%s%s", fmuPath, fmuFileName);
-			sprintf(resultFullFilePath, "%s%s", resultFilePath, resultFileName);
-			databuf = malloc(5000);
-			if ( !initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath) )
+			else if (strstr(recvbuf, "POST /sim"))
 			{
-				if (!simulate(resultFullFilePath, &variables, databuf))
+				logfile = fopen("log.txt", "w");
+				ptr = strstr(recvbuf, "projname");
+				variables.noOfParam = 0;
+				variables.noOfVars = 0;
+				while (!findNextToken(&ptr, token))
 				{
-					sprintf(databuf + strlen(databuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
-						"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
+					if (!strcmp(token, "fmuname"))
+					{
+						findNextToken(&ptr, token);
+						sprintf(fmuFileName, "%s%s", token, ".so");
+					}
+					else if (!strcmp(token, "projname"))
+					{
+						findNextToken(&ptr, token);
+						sprintf(resultFileName, "%s%s", token, ".txt");
+					}
+					else if (!strcmp(token, "pname"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &i);
+						findNextToken(&ptr, token);
+						variables.paramNames[i] = malloc(strlen(token));
+						strcpy((char*)variables.paramNames[i], token);
+						variables.noOfParam++;
+					}
+					else if (!strcmp(token, "pref"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &i);
+						getNextDelimiter(&ptr, "=");
+						ptr++;
+						sscanf(ptr, "%d", &variables.paramRefs[i]);
+					}
+					else if (!strcmp(token, "pval"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &i);
+						getNextDelimiter(&ptr, "=");
+						ptr++;
+						sscanf(ptr, "%lf", &variables.parameter[i]);
+					}
+					else if (!strcmp(token, "vname"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &i);
+						findNextTokenLimited(&ptr, token, '&');
+						variables.varNames[i] = malloc(strlen(token));
+						strcpy((char*)variables.varNames[i], token);
+						variables.noOfVars++;
+					}
+					else if (!strcmp(token, "vref"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &i);
+						getNextDelimiter(&ptr, "=");
+						ptr++;
+						sscanf(ptr, "%d", &variables.varRefs[i]);
+					}
+				}
+				sprintf(fmuFullFilePath, "%s%s", fmuPath, fmuFileName);
+				sprintf(resultFullFilePath, "%s%s", resultFilePath, resultFileName);
+				databuf = malloc(5000);
+				if (!initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath))
+				{
+					if (!simulate(resultFullFilePath, &variables, databuf))
+					{
+						sprintf(databuf + strlen(databuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
+							"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
+					}
+					else
+					{
+						strcat(databuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
+					}
+					//fmi2Terminate(fmuInstance);
+					//fmi2Reset(fmuInstance);
+					fmi2FreeInstance(fmuInstance);
+					dlclose(handle);
 				}
 				else
 				{
-					strcat(databuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
+					sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
 				}
-				//fmi2Terminate(fmuInstance);
-				//fmi2Reset(fmuInstance);
-				fmi2FreeInstance(fmuInstance);
-				dlclose (handle);
+				databuflen = strlen(databuf);
+				sprintf(header, http_protocol, databuflen, "text/html");
+				fclose(logfile);
 			}
 			else
 			{
-				sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
+				printf("No Content!\n");
+				databuf = malloc(128);
+				strcpy(databuf, "<p style='font-size:100px;text-align:center'>What!</p>");
+				databuflen = strlen(databuf);
+				sprintf(header, http_protocol, databuflen, "text/html");
 			}
-			databuflen = strlen(databuf);
-			sprintf(header, http_protocol, databuflen, "text/html");
-			fclose(logfile);
-		}
-		else
-		{
-			printf("No Content!\n");
-			databuf = malloc(128);
-			strcpy(databuf, "<p style='font-size:100px;text-align:center'>What!</p>");
-			databuflen = strlen(databuf);
-			sprintf(header, http_protocol, databuflen, "text/html");
-		}
-		if (!databuf) continue;
-		//printf("Header:\n%s\n\n", header);
-		sendbuflen = strlen(header) + databuflen;
-		sendbuf = malloc(sendbuflen);
-		strcpy(sendbuf, header);
-		memcpy(sendbuf + strlen(header), databuf, databuflen);
-		//printf("sendbuf:\n%s\n\n", sendbuf);
-		if ((numbytes = send(serverSocket, sendbuf, sendbuflen, 0)) < 1)
-		{
-			printf("Senden failed!\n");
-		}
-		printf("%i Bytes sent.\n\n", numbytes);
+			if (!databuf) break;
+			sendbuflen = strlen(header) + databuflen;
+			sendbuf = malloc(sendbuflen);
+			strcpy(sendbuf, header);
+			memcpy(sendbuf + strlen(header), databuf, databuflen);
+			if ((numbytes = send(serverSocket, sendbuf, sendbuflen, 0)) < 1)
+			{
+				printf("Senden failed!\n");
+				quitConnection = TRUE;
+				free(sendbuf);
+				free(databuf);
+				break;
+			}
+			printf("%d Bytes sent.\n", numbytes);
+			printf("Header:\n%s\n\n", header);
 
+			free(sendbuf);
+			free(databuf);
+			if (!PERSISTENT_CONNECTION) quitConnection = TRUE;
+		}
 		close(serverSocket);
-		free(sendbuf);
-		free(databuf);
 	}
 
 	close(acceptSocket);
