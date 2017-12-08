@@ -13,7 +13,6 @@
 
 #define FALSE 0
 #define TRUE 1
-#define PERSISTENT_CONNECTION TRUE
 
 #define FMI_GET_FUNC_ADDR( fun )						\
 			fun = (fun##TYPE*)dlsym(handle, #fun);		\
@@ -346,6 +345,7 @@ int main(int argc, char *argv[])
 	int port = 80;
 	bool quitServer = FALSE;
 	bool quitConnection;
+	bool persistentConnection = TRUE;
 	char str[128];
 	char recvbuf[1024];
 	char *sendbuf;
@@ -369,6 +369,32 @@ int main(int argc, char *argv[])
 	char *ptr;
 
 	printf("Web FMU Server\n\n");
+	for (i = 1; i < argc; i++)
+	{
+		if (!strcmp(argv[i], "-c"))
+		{
+			persistentConnection = FALSE;
+			printf("set connection type = closed\n\n");
+		}
+		else if (!strcmp(argv[i], "-p"))
+		{
+			persistentConnection = TRUE;
+			printf("set connection type = persistent\n\n");
+		}
+		else if (!strcmp(argv[i], "-h"))
+		{
+			printf("Options:\n");
+			printf("\t-h\t\tprint this help\n");
+			printf("\t-c\t\tset connection type = closed\n");
+			printf("\t-p\t\tset connection type = persistent\n");
+			exit(1);
+		}
+		else
+		{
+			printf("Unknown command!\n");
+			exit(1);
+		}
+	}
 
 	acceptSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (acceptSocket<0)
@@ -409,7 +435,7 @@ int main(int argc, char *argv[])
 		printf("Connection accepted.\n\n");
 
 		quitConnection = FALSE;
-		while (!quitConnection || PERSISTENT_CONNECTION)
+		while (!quitConnection || persistentConnection)
 		{
 			databuf = NULL;
 			printf("receiving...\n\n");
@@ -448,12 +474,39 @@ int main(int argc, char *argv[])
 				readFile(str, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, databuflen, "text/xml");
 			}
-			else if (strstr(recvbuf, "GET /?quit"))
+			else if (strstr(recvbuf, "GET /quit"))
 			{
 				printf("Server quitted!\n");
 				quitConnection = TRUE;
 				quitServer = TRUE;
 				break;
+			}
+			else if (strstr(recvbuf, "GET /options?"))
+			{
+				ptr = recvbuf;
+				getNextDelimiter(&ptr, "?");
+				findNextToken(&ptr, token);
+
+				databuf = malloc(128);
+				if (token[0] == 'c')
+				{
+					persistentConnection = FALSE;
+					printf("set connection type = closed\n\n");
+					strcpy(databuf, "<p>set connection type = closed</p>");
+				}
+				else if (token[0] == 'p')
+				{
+					persistentConnection = TRUE;
+					printf("set connection type = persistent\n\n");
+					strcpy(databuf, "<p>set connection type = persistent</p>");
+				}
+				else
+				{
+					printf("Unknown command!\n");
+					strcpy(databuf, "<p>Unknown command!</p>");
+				}
+				databuflen = strlen(databuf);
+				sprintf(header, http_protocol, databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /modelmenu"))
 			{
@@ -622,7 +675,7 @@ int main(int argc, char *argv[])
 
 			free(sendbuf);
 			free(databuf);
-			if (!PERSISTENT_CONNECTION) quitConnection = TRUE;
+			if (!persistentConnection) quitConnection = TRUE;
 		}
 		close(serverSocket);
 	}
