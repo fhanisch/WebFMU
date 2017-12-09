@@ -4,11 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <dirent.h>
+#include <sys/stat.h>
 #include "fmi2FunctionTypes.h"
 
 #define FALSE 0
@@ -474,20 +476,13 @@ int main(int argc, char *argv[])
 				readFile(str, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, databuflen, "text/xml");
 			}
-			else if (strstr(recvbuf, "GET /quit"))
-			{
-				printf("Server quitted!\n");
-				quitConnection = TRUE;
-				quitServer = TRUE;
-				break;
-			}
 			else if (strstr(recvbuf, "GET /options?"))
 			{
 				ptr = recvbuf;
 				getNextDelimiter(&ptr, "?");
 				findNextToken(&ptr, token);
 
-				databuf = malloc(128);
+				databuf = malloc(1024);
 				if (token[0] == 'c')
 				{
 					persistentConnection = FALSE;
@@ -499,6 +494,21 @@ int main(int argc, char *argv[])
 					persistentConnection = TRUE;
 					printf("set connection type = persistent\n\n");
 					strcpy(databuf, "<p>set connection type = persistent</p>");
+				}
+				else if (token[0] == 'q')
+				{
+					printf("Server quitted!\n");
+					quitConnection = TRUE;
+					quitServer = TRUE;
+					break;
+				}
+				else if (token[0] == 'h')
+				{
+					strcpy(databuf, "<p>Options:</p>");
+					strcat(databuf, "<p>-h print this help</p>");
+					strcat(databuf, "<p>-c set connection type = closed</p>");
+					strcat(databuf, "<p>-p set connection type = persistent</p>");
+					strcat(databuf, "<p>-q quit server</p>");
 				}
 				else
 				{
@@ -537,14 +547,15 @@ int main(int argc, char *argv[])
 				databuflen = strlen(databuf);
 				sprintf(header, http_protocol, databuflen, "text/html");
 			}
-			else if (strstr(recvbuf, "GET /data"))
+			else if (strstr(recvbuf, "GET /results"))
 			{
 				DIR *dp;
 				struct dirent *ep;
+				struct stat fileStat;
 				char fmuName[128];
 				char token[128];
 
-				databuf = malloc(1024);
+				databuf = malloc(2048);
 				strcpy(databuf, "<html><table>");
 
 				dp = opendir("data");
@@ -555,7 +566,14 @@ int main(int argc, char *argv[])
 						ptr = ep->d_name;
 						if (findNextToken(&ptr, fmuName)) continue;
 						if (findNextToken(&ptr, token)) continue;
-						if (!strcmp(token, "txt")) sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s.txt'>%s</a></td></tr>", fmuName, fmuName);
+	
+						if (!strcmp(token, "txt"))
+						{
+							sprintf(fmuName, "%s.%s", fmuName, token);
+							sprintf(str, "data/%s", fmuName);
+							stat(str, &fileStat);
+							sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s'>%s</a></td><td>%d</td><td>%s</td></tr>", fmuName, fmuName, fileStat.st_size,ctime(&fileStat.st_mtime));
+						}
 					}
 					(void)closedir(dp);
 				}
