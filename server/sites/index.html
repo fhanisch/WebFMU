@@ -48,7 +48,6 @@
           document.getElementById("modelmenu").innerHTML = this.responseText;
           var selectedIndex = document.getElementById("modelSelection").selectedIndex;
           var options = document.getElementById("modelSelection").options;
-          getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
           showModelDescription(options[selectedIndex].text);
           var modelDescr = document.getElementById("modelDescr");
           modelDescr.setAttribute("href","load?fmu/" + options[selectedIndex].text + ".xml");
@@ -63,7 +62,6 @@
       {
         var selectedIndex = document.getElementById("modelSelection").selectedIndex;
         var options = document.getElementById("modelSelection").options;
-        getAdditionalModelInfo("modelInfo"+options[selectedIndex].text.substr(String("modelDescription").length));
         showModelDescription(options[selectedIndex].text);
         var modelDescr = document.getElementById("modelDescr");
         modelDescr.setAttribute("href","load?fmu/" + options[selectedIndex].text + ".xml");
@@ -78,6 +76,7 @@
         xhttp.onreadystatechange = function() {
             if (this.readyState == 4 && this.status == 200) {
                 myFunction(this);
+                getAdditionalModelInfo("modelInfo"+modelDescriptionName .substr(String("modelDescription").length));
             }
         };
         xhttp.open("GET", "load?fmu/" + modelDescriptionName + ".xml", true);
