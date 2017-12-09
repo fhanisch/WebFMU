@@ -514,7 +514,6 @@ int main(int argc, char *argv[])
 				struct dirent *ep;
 				char fmuName[128];
 				char token[128];
-				char *ptr;
 
 				databuf = malloc(1024);
 				strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
@@ -525,8 +524,8 @@ int main(int argc, char *argv[])
 					while (ep = readdir(dp))
 					{
 						ptr = ep->d_name;
-						findNextToken(&ptr, fmuName);
-						findNextToken(&ptr, token);
+						if (findNextToken(&ptr, fmuName)) continue;
+						if (findNextToken(&ptr, token)) continue;
 						if (!strcmp(token, "xml")) sprintf(databuf + strlen(databuf), "<option>%s</option>", fmuName);
 					}
 					(void)closedir(dp);
@@ -535,6 +534,35 @@ int main(int argc, char *argv[])
 					printf("Couldn't open the directory!\n");
 
 				sprintf(databuf + strlen(databuf), "</select>");
+				databuflen = strlen(databuf);
+				sprintf(header, http_protocol, databuflen, "text/html");
+			}
+			else if (strstr(recvbuf, "GET /data"))
+			{
+				DIR *dp;
+				struct dirent *ep;
+				char fmuName[128];
+				char token[128];
+
+				databuf = malloc(1024);
+				strcpy(databuf, "<html><table>");
+
+				dp = opendir("data");
+				if (dp != NULL)
+				{
+					while (ep = readdir(dp))
+					{
+						ptr = ep->d_name;
+						if (findNextToken(&ptr, fmuName)) continue;
+						if (findNextToken(&ptr, token)) continue;
+						if (!strcmp(token, "txt")) sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s.txt'>%s</a></td></tr>", fmuName, fmuName);
+					}
+					(void)closedir(dp);
+				}
+				else
+					printf("Couldn't open the directory!\n");
+
+				sprintf(databuf + strlen(databuf), "</table></html>");
 				databuflen = strlen(databuf);
 				sprintf(header, http_protocol, databuflen, "text/html");
 			}
