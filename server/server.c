@@ -558,7 +558,7 @@ int main(int argc, char *argv[])
 
 				sprintf(databuf + strlen(databuf), "</select>");
 				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, "max-age=600", databuflen, "text/html");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /results"))
 			{
