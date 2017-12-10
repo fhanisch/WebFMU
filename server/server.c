@@ -1,5 +1,10 @@
-//gcc -std=c11 -o server server.c -ldl
 /// @date: 01.12.2017
+/// @author: fh
+
+/*
+	compile: gcc -std=c11 -o server server.c -ldl
+	Wichtig: Cache-Control im Header beachten !!! --> Wann müssen welche Seiten aktualisiert werden?
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +47,7 @@ typedef struct
 char header[512];
 const char http_protocol[] =	"HTTP/1.1 200 OK\r\n"
 								"Server: WebFMU Server\r\n"
+								"Cache-Control: %s\r\n"
 								"Content-Length: %d\r\n"
 								"Content-Type: %s\r\n\r\n";
 
@@ -460,28 +466,28 @@ int main(int argc, char *argv[])
 			if (strstr(recvbuf, "GET / HTTP/1.1"))
 			{
 				readFile("sites/index.html", &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, databuflen, "text/html");
+				sprintf(header, http_protocol, "max-age=600", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /style.css"))
 			{
 				readFile("sites/style.css", &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, databuflen, "text/css");
+				sprintf(header, http_protocol, "max-age=600", databuflen, "text/css");
 			}
 			else if (strstr(recvbuf, "GET /favicon"))
 			{
 				readFile("FMU_32x32.png", &databuflen, &databuf, "rb");
-				sprintf(header, http_protocol, databuflen, "image/apng");
+				sprintf(header, http_protocol, "max-age=600", databuflen, "image/apng");
 			}
 			else if (strstr(recvbuf, "GET /logo"))
 			{
 				readFile("FMU.svg", &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, databuflen, "image/svg+xml");
+				sprintf(header, http_protocol, "max-age=600", databuflen, "image/svg+xml");
 			}
 			else if (strstr(recvbuf, "GET /modelparameter"))
 			{
 				sprintf(str, "fmu/%s.xml", linkModelParam);
 				readFile(str, &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, databuflen, "text/xml");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
 			}
 			else if (strstr(recvbuf, "GET /options?"))
 			{
@@ -523,7 +529,7 @@ int main(int argc, char *argv[])
 					strcpy(databuf, "<p>Unknown command!</p>");
 				}
 				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, databuflen, "text/html");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /modelmenu"))
 			{
@@ -552,7 +558,7 @@ int main(int argc, char *argv[])
 
 				sprintf(databuf + strlen(databuf), "</select>");
 				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, databuflen, "text/html");
+				sprintf(header, http_protocol, "max-age=600", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /results"))
 			{
@@ -589,7 +595,7 @@ int main(int argc, char *argv[])
 
 				sprintf(databuf + strlen(databuf), "</table></html>");
 				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, databuflen, "text/html");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /load?"))
 			{
@@ -610,9 +616,9 @@ int main(int argc, char *argv[])
 					findNextToken(&ptr, linkModelParam);
 				}
 				readFile(str, &databuflen, &databuf, "r");
-				if (strstr(str, "xml")) sprintf(header, http_protocol, databuflen, "text/xml");
-				else if (strstr(str, "txt")) sprintf(header, http_protocol, databuflen, "text/plain");
-				else sprintf(header, http_protocol, databuflen, "text/html");
+				if (strstr(str, "xml")) sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
+				else if (strstr(str, "txt")) sprintf(header, http_protocol, "no-store", databuflen, "text/plain");
+				else sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "POST /sim"))
 			{
@@ -699,7 +705,7 @@ int main(int argc, char *argv[])
 					sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
 				}
 				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, databuflen, "text/html");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 				fclose(logfile);
 			}
 			else
@@ -708,7 +714,7 @@ int main(int argc, char *argv[])
 				databuf = malloc(128);
 				strcpy(databuf, "<p style='font-size:100px;text-align:center'>What!</p>");
 				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, databuflen, "text/html");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
 			if (!databuf) break;
 			sendbuflen = strlen(header) + databuflen;
