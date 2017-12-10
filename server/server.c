@@ -383,6 +383,11 @@ int main(int argc, char *argv[])
 			persistentConnection = TRUE;
 			printf("set connection type = persistent\n\n");
 		}
+		else if (!strcmp(argv[i], "-port"))
+		{
+			sscanf(argv[i + 1], "%d", &port);
+			printf("set port = %d\n", port);
+		}
 		else if (!strcmp(argv[i], "-h"))
 		{
 			printf("Options:\n");
