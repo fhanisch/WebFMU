@@ -47,6 +47,7 @@ typedef struct
 char header[512];
 const char http_protocol[] =	"HTTP/1.1 200 OK\r\n"
 								"Server: WebFMU Server\r\n"
+								"Keep-Alive: timeout=20, max=50\r\n"
 								"Cache-Control: %s\r\n"
 								"Content-Length: %d\r\n"
 								"Content-Type: %s\r\n\r\n";
