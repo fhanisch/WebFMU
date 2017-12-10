@@ -387,6 +387,7 @@ int main(int argc, char *argv[])
 		{
 			sscanf(argv[i + 1], "%d", &port);
 			printf("set port = %d\n", port);
+			i++;
 		}
 		else if (!strcmp(argv[i], "-h"))
 		{
@@ -394,6 +395,7 @@ int main(int argc, char *argv[])
 			printf("\t-h\t\tprint this help\n");
 			printf("\t-c\t\tset connection type = closed\n");
 			printf("\t-p\t\tset connection type = persistent\n");
+			printf("\t-port\t\tset port\n");
 			exit(1);
 		}
 		else
