@@ -2,7 +2,7 @@
 /// @author: fh
 
 /*
-	compile: gcc -std=c11 -o server server.c -ldl
+	compile: gcc -std=c11 -o webfmuserver server.c -ldl
 	Wichtig: Cache-Control im Header beachten !!! --> Wann müssen welche Seiten aktualisiert werden?
 */
 
