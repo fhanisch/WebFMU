@@ -73,12 +73,16 @@ char getNextDelimiter(char **src, char *delimiter)
 	{
 		for (uint32_t i = 0; i < strlen(delimiter); i++)
 		{
-			if (**src == delimiter[i]) return delimiter[i];
+			if (**src == delimiter[i])
+			{
+				(*src)++;
+				return delimiter[i];
+			}
 		}
 		(*src)++;
 	}
 
-	return -1;
+	return 0;
 }
 
 int findNextTokenLimited(char **src, char *token, char limit)
@@ -307,9 +311,10 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 	}
 	
 	char *ptr = resultFullFilePath;
+	char *tmp;
 	char token[32];
-	getNextDelimiter(&ptr, "/");
-	findNextToken(&ptr, token);
+	while (getNextDelimiter(&ptr, "/")) { tmp = ptr; }
+	findNextToken(&tmp, token);
 	sprintf(htmlbuf, "%s", "<table>");
 	sprintf(htmlbuf+strlen(htmlbuf), "<tr><td>%s</td><td>%s</td></tr>", "Projektname", token);
 	for (i = 0; i < variables->noOfParam; i++)
@@ -336,6 +341,11 @@ int readFile(char *filename, int *dataSize, char **data, char *readMode)
 	FILE *file;
 
 	file = fopen(filename, readMode);
+	if (file == NULL)
+	{
+		printf("Could not open the file!\n");
+		return -1;
+	}
 	fseek(file, 0, SEEK_END);
 	*dataSize = ftell(file);
 	rewind(file);
@@ -363,12 +373,13 @@ int main(int argc, char *argv[])
 	int databuflen;
 	int numbytes;
 	int i;
+	char loadPath[256];
 	char fmuPath[] = "fmu/";
 	char fmuFileName[64];
-	char fmuFullFilePath[128];
+	char fmuFullFilePath[256];
 	char resultFilePath[] = "data/";
 	char resultFileName[64];
-	char resultFullFilePath[128];
+	char resultFullFilePath[256];
 	char linkModelParam[64];
 	Variables variables;
 	char token[256];
@@ -378,6 +389,12 @@ int main(int argc, char *argv[])
 	char *ptr;
 
 	printf("Web FMU Server\n\n");
+	
+	ptr = argv[0];
+	char *tmp = ptr;
+	while (getNextDelimiter(&ptr, "/")) { tmp = ptr; }
+	*tmp = 0;
+	//printf("%s\n\n", argv[0]);
 	for (i = 1; i < argc; i++)
 	{
 		if (!strcmp(argv[i], "-c"))
@@ -466,28 +483,33 @@ int main(int argc, char *argv[])
 
 			if (strstr(recvbuf, "GET / HTTP/1.1"))
 			{
-				readFile("sites/index.html", &databuflen, &databuf, "r");
+				sprintf(loadPath, "%s%s", argv[0], "sites/index.html");
+				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "max-age=600", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /style.css"))
 			{
-				readFile("sites/style.css", &databuflen, &databuf, "r");
+				sprintf(loadPath, "%s%s", argv[0], "sites/style.css");
+				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "max-age=600", databuflen, "text/css");
 			}
 			else if (strstr(recvbuf, "GET /favicon"))
 			{
-				readFile("FMU_32x32.png", &databuflen, &databuf, "rb");
+				sprintf(loadPath, "%s%s", argv[0], "FMU_32x32.png");
+				readFile(loadPath, &databuflen, &databuf, "rb");
 				sprintf(header, http_protocol, "max-age=600", databuflen, "image/apng");
 			}
 			else if (strstr(recvbuf, "GET /logo"))
 			{
-				readFile("FMU.svg", &databuflen, &databuf, "r");
+				sprintf(loadPath, "%s%s", argv[0], "FMU.svg");
+				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "max-age=600", databuflen, "image/svg+xml");
 			}
 			else if (strstr(recvbuf, "GET /modelparameter"))
 			{
 				sprintf(str, "fmu/%s.xml", linkModelParam);
-				readFile(str, &databuflen, &databuf, "r");
+				sprintf(loadPath, "%s%s", argv[0], str);
+				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
 			}
 			else if (strstr(recvbuf, "GET /options?"))
@@ -542,7 +564,8 @@ int main(int argc, char *argv[])
 				databuf = malloc(1024);
 				strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
 
-				dp = opendir("fmu");
+				sprintf(loadPath, "%s%s", argv[0], "fmu");
+				dp = opendir(loadPath);
 				if (dp != NULL)
 				{
 					while (ep = readdir(dp))
@@ -572,7 +595,8 @@ int main(int argc, char *argv[])
 				databuf = malloc(2048);
 				strcpy(databuf, "<html><table>");
 
-				dp = opendir("data");
+				sprintf(loadPath, "%s%s", argv[0], "data");
+				dp = opendir(loadPath);
 				if (dp != NULL)
 				{
 					while (ep = readdir(dp))
@@ -585,7 +609,8 @@ int main(int argc, char *argv[])
 						{
 							sprintf(fmuName, "%s.%s", fmuName, token);
 							sprintf(str, "data/%s", fmuName);
-							stat(str, &fileStat);
+							sprintf(loadPath, "%s%s", argv[0], str);
+							stat(loadPath, &fileStat);
 							sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s'>%s</a></td><td>%d</td><td>%s</td></tr>", fmuName, fmuName, fileStat.st_size,ctime(&fileStat.st_mtime));
 						}
 					}
@@ -616,14 +641,16 @@ int main(int argc, char *argv[])
 				{
 					findNextToken(&ptr, linkModelParam);
 				}
-				readFile(str, &databuflen, &databuf, "r");
+				sprintf(loadPath, "%s%s", argv[0], str);
+				readFile(loadPath, &databuflen, &databuf, "r");
 				if (strstr(str, "xml")) sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
 				else if (strstr(str, "txt")) sprintf(header, http_protocol, "no-store", databuflen, "text/plain");
 				else sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "POST /sim"))
 			{
-				logfile = fopen("log.txt", "w");
+				sprintf(loadPath, "%s%s", argv[0], "log.txt");
+				logfile = fopen(loadPath, "w");
 				ptr = strstr(recvbuf, "projname");
 				variables.noOfParam = 0;
 				variables.noOfVars = 0;
@@ -653,7 +680,6 @@ int main(int argc, char *argv[])
 						ptr++;
 						sscanf(ptr, "%d", &i);
 						getNextDelimiter(&ptr, "=");
-						ptr++;
 						sscanf(ptr, "%d", &variables.paramRefs[i]);
 					}
 					else if (!strcmp(token, "pval"))
@@ -661,7 +687,6 @@ int main(int argc, char *argv[])
 						ptr++;
 						sscanf(ptr, "%d", &i);
 						getNextDelimiter(&ptr, "=");
-						ptr++;
 						sscanf(ptr, "%lf", &variables.parameter[i]);
 					}
 					else if (!strcmp(token, "vname"))
@@ -678,12 +703,11 @@ int main(int argc, char *argv[])
 						ptr++;
 						sscanf(ptr, "%d", &i);
 						getNextDelimiter(&ptr, "=");
-						ptr++;
 						sscanf(ptr, "%d", &variables.varRefs[i]);
 					}
 				}
-				sprintf(fmuFullFilePath, "%s%s", fmuPath, fmuFileName);
-				sprintf(resultFullFilePath, "%s%s", resultFilePath, resultFileName);
+				sprintf(fmuFullFilePath, "%s%s%s", argv[0], fmuPath, fmuFileName);
+				sprintf(resultFullFilePath, "%s%s%s", argv[0], resultFilePath, resultFileName);
 				databuf = malloc(5000);
 				if (!initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath))
 				{

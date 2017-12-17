@@ -23,6 +23,9 @@
     <text x="95" y="80" fill="blue">a</text>
     <text x="395" y="80" fill="blue">b</text>
     <text x="695" y="80" fill="blue">c</text>
+    <foreignObject x="150" y="270" width="100" height="50">
+	    <p id="formel">$U_0 = \Phi$</p>
+    </foreignObject>
   </svg>
 </div>
 <p id="formel">
