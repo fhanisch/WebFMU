@@ -374,6 +374,7 @@ int main(int argc, char *argv[])
 	int numbytes;
 	int i;
 	char loadPath[256];
+	int loadPathLen;
 	char fmuPath[] = "fmu/";
 	char fmuFileName[64];
 	char fmuFullFilePath[256];
@@ -394,7 +395,9 @@ int main(int argc, char *argv[])
 	char *tmp = ptr;
 	while (getNextDelimiter(&ptr, "/")) { tmp = ptr; }
 	*tmp = 0;
-	//printf("%s\n\n", argv[0]);
+	strcpy(loadPath, argv[0]);
+	loadPathLen = strlen(loadPath);
+	//printf("%s\n\n", loadPath);
 	for (i = 1; i < argc; i++)
 	{
 		if (!strcmp(argv[i], "-c"))
@@ -483,32 +486,32 @@ int main(int argc, char *argv[])
 
 			if (strstr(recvbuf, "GET / HTTP/1.1"))
 			{
-				sprintf(loadPath, "%s%s", argv[0], "sites/index.html");
+				strcpy(loadPath + loadPathLen, "sites/index.html");
 				readFile(loadPath, &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, "max-age=600", databuflen, "text/html");
+				sprintf(header, http_protocol, "max-age=3600", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /style.css"))
 			{
-				sprintf(loadPath, "%s%s", argv[0], "sites/style.css");
+				strcpy(loadPath + loadPathLen, "sites/style.css");
 				readFile(loadPath, &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, "max-age=600", databuflen, "text/css");
+				sprintf(header, http_protocol, "max-age=3600", databuflen, "text/css");
 			}
 			else if (strstr(recvbuf, "GET /favicon"))
 			{
-				sprintf(loadPath, "%s%s", argv[0], "FMU_32x32.png");
+				strcpy(loadPath + loadPathLen, "FMU_32x32.png");
 				readFile(loadPath, &databuflen, &databuf, "rb");
-				sprintf(header, http_protocol, "max-age=600", databuflen, "image/apng");
+				sprintf(header, http_protocol, "max-age=3600", databuflen, "image/apng");
 			}
 			else if (strstr(recvbuf, "GET /logo"))
 			{
-				sprintf(loadPath, "%s%s", argv[0], "FMU.svg");
+				strcpy(loadPath + loadPathLen, "FMU.svg");
 				readFile(loadPath, &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, "max-age=600", databuflen, "image/svg+xml");
+				sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
 			}
 			else if (strstr(recvbuf, "GET /modelparameter"))
 			{
 				sprintf(str, "fmu/%s.xml", linkModelParam);
-				sprintf(loadPath, "%s%s", argv[0], str);
+				strcpy(loadPath + loadPathLen, str);
 				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
 			}
@@ -564,7 +567,7 @@ int main(int argc, char *argv[])
 				databuf = malloc(1024);
 				strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
 
-				sprintf(loadPath, "%s%s", argv[0], "fmu");
+				strcpy(loadPath + loadPathLen, "fmu");
 				dp = opendir(loadPath);
 				if (dp != NULL)
 				{
@@ -580,7 +583,7 @@ int main(int argc, char *argv[])
 				else
 					printf("Couldn't open the directory!\n");
 
-				sprintf(databuf + strlen(databuf), "</select>");
+				strcpy(databuf + strlen(databuf), "</select>");
 				databuflen = strlen(databuf);
 				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
@@ -595,7 +598,7 @@ int main(int argc, char *argv[])
 				databuf = malloc(2048);
 				strcpy(databuf, "<html><table>");
 
-				sprintf(loadPath, "%s%s", argv[0], "data");
+				strcpy(loadPath + loadPathLen, "data");
 				dp = opendir(loadPath);
 				if (dp != NULL)
 				{
@@ -609,7 +612,7 @@ int main(int argc, char *argv[])
 						{
 							sprintf(fmuName, "%s.%s", fmuName, token);
 							sprintf(str, "data/%s", fmuName);
-							sprintf(loadPath, "%s%s", argv[0], str);
+							strcpy(loadPath + loadPathLen, str);
 							stat(loadPath, &fileStat);
 							sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s'>%s</a></td><td>%d</td><td>%s</td></tr>", fmuName, fmuName, fileStat.st_size,ctime(&fileStat.st_mtime));
 						}
@@ -619,7 +622,7 @@ int main(int argc, char *argv[])
 				else
 					printf("Couldn't open the directory!\n");
 
-				sprintf(databuf + strlen(databuf), "</table></html>");
+				strcpy(databuf + strlen(databuf), "</table></html>");
 				databuflen = strlen(databuf);
 				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
@@ -641,7 +644,7 @@ int main(int argc, char *argv[])
 				{
 					findNextToken(&ptr, linkModelParam);
 				}
-				sprintf(loadPath, "%s%s", argv[0], str);
+				strcpy(loadPath + loadPathLen, str);
 				readFile(loadPath, &databuflen, &databuf, "r");
 				if (strstr(str, "xml")) sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
 				else if (strstr(str, "txt")) sprintf(header, http_protocol, "no-store", databuflen, "text/plain");
@@ -649,7 +652,7 @@ int main(int argc, char *argv[])
 			}
 			else if (strstr(recvbuf, "POST /sim"))
 			{
-				sprintf(loadPath, "%s%s", argv[0], "log.txt");
+				strcpy(loadPath + loadPathLen, "log.txt");
 				logfile = fopen(loadPath, "w");
 				ptr = strstr(recvbuf, "projname");
 				variables.noOfParam = 0;
