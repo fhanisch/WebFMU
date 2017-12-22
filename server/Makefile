@@ -5,3 +5,4 @@ webfmuserver: server.c
 
 install:
 	sudo cp webfmuserver /usr/local/webfmu
+	sudo cp sites/index.html /usr/local/webfmu/sites

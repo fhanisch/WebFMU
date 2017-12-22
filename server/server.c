@@ -210,7 +210,7 @@ int sim_pt1(double t[], double x[], double tau, int i)
 	return 0;
 }
 
-int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
+int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variables *variables, char *htmlbuf)
 {
 	int i = 0;
 	int j;
@@ -218,9 +218,9 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 	FILE *result;
 	fmi2Real tolerance = 0.000001;
 	fmi2Real tStart = 0;
-	fmi2Real tStop = 1;
 	fmi2Real tComm = tStart;
 	fmi2Real tCommStep = 0.001; // FMU Exports duch OMC verwenden nur den Euler --> dort gibt es keine interne Schrittweite --> es wird nur die Kommunikationsschrittweite verwendet
+	fmi2Real tNextOut = tStart;
 	fmi2Status status = fmi2OK;
 
 	result = fopen(resultFullFilePath, "w");
@@ -283,8 +283,9 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 		fwrite(str, 1, strlen(str), result);
 	}
 	fwrite("\n", 1, 1, result);
+	tNextOut += tOutStep;
 	
-	while (tComm < tStop && status == fmi2OK)
+	while (tComm < (tStop-0.00000001) && status == fmi2OK)
 	{
 		status = fmi2DoStep(fmuInstance, tComm, tCommStep, fmi2True);
 		if (status != fmi2OK)
@@ -293,21 +294,26 @@ int simulate(char *resultFullFilePath, Variables *variables, char *htmlbuf)
 			fwrite(str, 1, strlen(str), logfile);
 		}
 		tComm += tCommStep;
-		i++;
+
 		status = fmi2GetReal(fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
 		if (status != fmi2OK)
 		{
 			sprintf(str, "Error getReal!\n");
 			fwrite(str, 1, strlen(str), logfile);
 		}
-		sprintf(str, "%d,%0.3f", i, tComm);
-		fwrite(str, 1, strlen(str), result);
-		for (j = 0; j < variables->noOfVars; j++)
+		if (!(tComm < (tNextOut-0.00000001)))
 		{
-			sprintf(str, ",%0.3f", variables->var[j]);
+			i++;
+			sprintf(str, "%d,%0.3f", i, tComm);
 			fwrite(str, 1, strlen(str), result);
+			for (j = 0; j < variables->noOfVars; j++)
+			{
+				sprintf(str, ",%0.3f", variables->var[j]);
+				fwrite(str, 1, strlen(str), result);
+			}
+			fwrite("\n", 1, 1, result);
+			tNextOut += tOutStep;
 		}
-		fwrite("\n", 1, 1, result);
 	}
 	
 	char *ptr = resultFullFilePath;
@@ -382,6 +388,8 @@ int main(int argc, char *argv[])
 	char resultFileName[64];
 	char resultFullFilePath[256];
 	char linkModelParam[64];
+	fmi2Real tstop = 1.0;
+	fmi2Real tOutStep = 0.1;
 	Variables variables;
 	char token[256];
 	fmi2String instanceName = "WebFMU";
@@ -670,6 +678,16 @@ int main(int argc, char *argv[])
 						findNextToken(&ptr, token);
 						sprintf(resultFileName, "%s%s", token, ".txt");
 					}
+					else if (!strcmp(token, "tstop"))
+					{
+						getNextDelimiter(&ptr, "=");
+						sscanf(ptr, "%lf", &tstop);
+					}
+					else if (!strcmp(token, "tOutStep"))
+					{
+						getNextDelimiter(&ptr, "=");
+						sscanf(ptr, "%lf", &tOutStep);
+					}
 					else if (!strcmp(token, "pname"))
 					{
 						ptr++;
@@ -715,7 +733,7 @@ int main(int argc, char *argv[])
 				databuf = malloc(5000);
 				if (!initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath))
 				{
-					if (!simulate(resultFullFilePath, &variables, databuf))
+					if (!simulate(resultFullFilePath, tstop, tOutStep, &variables, databuf))
 					{
 						sprintf(databuf + strlen(databuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
 							"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);

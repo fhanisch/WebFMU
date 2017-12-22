@@ -103,6 +103,14 @@
         txt+="<td><label for='projektname'>Projektname</label></td>"
         txt+="<td><input id='projektname' type='text' name='projektname' value='proj1'/></td>"
         txt+="</tr>";
+        txt+="<tr>";
+        txt+="<td><label for='tstop'>Stop Time</label></td>"
+        txt+="<td><input id='tstop' type='text' name='tstop' value='1.0'/></td>"
+        txt+="</tr>";
+        txt+="<tr>";
+        txt+="<td><label for='tOutStep'>Output Intervall</label></td>"
+        txt+="<td><input id='tOutStep' type='text' name='tOutStep' value='0.1'/></td>"
+        txt+="</tr>";
         xmlDoc = xml.responseXML;
         var fmiModelDescription = xmlDoc.getElementsByTagName("fmiModelDescription");
         var modelName = fmiModelDescription[0].attributes.getNamedItem("modelName").nodeValue;
@@ -158,6 +166,14 @@
         parameterlist+="&";
         parameterlist+="fmuname=";
         parameterlist+=fmuName;
+        parameterlist+="&";
+        var tstop = document.getElementById("tstop");
+        parameterlist+="tstop=";
+        parameterlist+=tstop.value;
+        parameterlist+="&";
+        var tOutStep = document.getElementById("tOutStep");
+        parameterlist+="tOutStep=";
+        parameterlist+=tOutStep.value;
 
         var parameter = document.getElementsByClassName("parameter");
         var j=0;
