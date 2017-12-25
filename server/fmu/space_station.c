@@ -1,5 +1,5 @@
 // SpaceStation - FMU
-// gcc -shared -Wall -o space_station_fmu.so space_station.c
+// gcc -std=c11 -shared -Wall -o space_station_fmu.so space_station.c
 
 #include <math.h>
 
@@ -43,11 +43,11 @@ typedef struct {
 
 char version[] = "FMU 2.0 by Felix";
 const double G = 6.67408e-11;
-double m;
-double x[3];
-double der_x[3];
-double v[3];
-double der_v[3];
+double earth_m, station_m;
+double earth_x[3], station_x[3];
+double earth_der_x[3], station_der_x[3];
+double earth_v[3], station_v[3];
+double earth_der_v[3], station_der_v[3];
 double f[3];
 
 char *fmi2GetVersion()
@@ -62,13 +62,23 @@ fmi2Component fmi2Instantiate(fmi2String instanceName, fmi2Type fmi2CoSimulation
 
 fmi2Status fmi2SetupExperiment(fmi2Component c, fmi2Boolean toleranceDefined, fmi2Real tolerance, fmi2Real tStart, fmi2Boolean tStopDefined, fmi2Real tStop)
 {
-	m = 500e3;
-	x[0] = 0;
-	x[1] = 6378000 + 400000;
-	x[2] = 0;
-	v[0] = 7650;
-	v[1] = 0;
-	v[2] = 0;
+	//init earth
+	earth_m = 5.976e24;
+	earth_x[0] = 0;
+	earth_x[1] = 0;
+	earth_x[2] = 0;
+	earth_v[0] = 0;
+	earth_v[1] = 0;
+	earth_v[2] = 0;
+
+	//init space station
+	station_m = 500e3;
+	station_x[0] = 0;
+	station_x[1] = 6378000 + 400000;
+	station_x[2] = 0;
+	station_v[0] = 7650;
+	station_v[1] = 0;
+	station_v[2] = 0;
 
 	return fmi2OK;
 }
@@ -99,8 +109,10 @@ fmi2Status fmi2GetReal(fmi2Component c, const fmi2ValueReference refs[], unsigne
 { 
 	for ( int i=0; i < n; i++)
 	{
-		if (refs[i] == 0) vars[i] = x[0];
-		else if (refs[i] == 1) vars[i] = x[1];
+		if (refs[i] == 0) vars[i] = station_x[0];
+		else if (refs[i] == 1) vars[i] = station_x[1];
+		else if (refs[i] == 2) vars[i] = earth_x[0];
+		else if (refs[i] == 3) vars[i] = earth_x[1];
 	}
 	return fmi2OK;
 }
@@ -110,36 +122,54 @@ fmi2Status fmi2SetReal(fmi2Component c, const fmi2ValueReference refs[], unsigne
 	return fmi2OK;
 }
 
-void gravitationalForce(double f[3], double x[3], double m1, double m2)
+void gravitationalForce(double f[3], double r1[3],double r2[3], double m1, double m2)
 {
 	double r;
 
-	r = sqrt(pow(x[0],2) + pow(x[1],2) + pow(x[2],2));
+	r = sqrt(pow(r1[0]-r2[0],2) + pow(r1[1]-r2[1],2) + pow(r1[2]-r2[2],2));
 
-	f[0] = G * m1 * m2 * x[0] / pow(r, 3);
-	f[1] = G * m1 * m2 * x[1] / pow(r, 3);
-	f[2] = G * m1 * m2 * x[2] / pow(r, 3);
+	f[0] = G * m1 * m2 * (r2[0]-r1[0]) / pow(r, 3);
+	f[1] = G * m1 * m2 * (r2[1]-r1[1]) / pow(r, 3);
+	f[2] = G * m1 * m2 * (r2[2]-r1[2]) / pow(r, 3);
 }
 
 fmi2Status fmi2DoStep(fmi2Component c, fmi2Real t, fmi2Real h, fmi2Boolean noSetFMUStatePriorToCurrentPoint)
 {
-	gravitationalForce(f, x, m, 5.976e24);
+	gravitationalForce(f, earth_x, station_x, earth_m, station_m);
 
-	der_x[0] = v[0];
-	der_x[1] = v[1];
-	der_x[2] = v[2];
+	// equations earth
+	earth_der_x[0] = earth_v[0];
+	earth_der_x[1] = earth_v[1];
+	earth_der_x[2] = earth_v[2];
 
-	der_v[0] = -1.0 / m * f[0];
-	der_v[1] = -1.0 / m * f[1];
-	der_v[2] = -1.0 / m * f[2];
+	earth_der_v[0] = 1.0 / earth_m * f[0];
+	earth_der_v[1] = 1.0 / earth_m * f[1];
+	earth_der_v[2] = 1.0 / earth_m * f[2];
 
-	x[0] += h * der_x[0];
-	x[1] += h * der_x[1];
-	x[2] += h * der_x[2];
+	earth_x[0] += h * earth_der_x[0];
+	earth_x[1] += h * earth_der_x[1];
+	earth_x[2] += h * earth_der_x[2];
 
-	v[0] += h * der_v[0];
-	v[1] += h * der_v[1];
-	v[2] += h * der_v[2];
+	earth_v[0] += h * earth_der_v[0];
+	earth_v[1] += h * earth_der_v[1];
+	earth_v[2] += h * earth_der_v[2];
+
+	// equations space station
+	station_der_x[0] = station_v[0];
+	station_der_x[1] = station_v[1];
+	station_der_x[2] = station_v[2];
+
+	station_der_v[0] = -1.0 / station_m * f[0];
+	station_der_v[1] = -1.0 / station_m * f[1];
+	station_der_v[2] = -1.0 / station_m * f[2];
+
+	station_x[0] += h * station_der_x[0];
+	station_x[1] += h * station_der_x[1];
+	station_x[2] += h * station_der_x[2];
+
+	station_v[0] += h * station_der_v[0];
+	station_v[1] += h * station_der_v[1];
+	station_v[2] += h * station_der_v[2];
 
 	return fmi2OK;
 }
