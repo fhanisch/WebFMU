@@ -55,9 +55,8 @@ char *fmi2GetVersion()
 	return version;
 }
 
-fmi2Component fmi2InstantiateTYPE(fmi2String instanceName, fmi2Type fmi2CoSimulation, fmi2String guid, fmi2String fmuResourcesLocation, const fmi2CallbackFunctions* callbacks, fmi2Boolean visible, fmi2Boolean logginhOn)
+fmi2Component fmi2Instantiate(fmi2String instanceName, fmi2Type fmi2CoSimulation, fmi2String guid, fmi2String fmuResourcesLocation, const fmi2CallbackFunctions* callbacks, fmi2Boolean visible, fmi2Boolean logginhOn)
 {
-
 	return (fmi2Component)1;
 }
 
@@ -71,6 +70,43 @@ fmi2Status fmi2SetupExperiment(fmi2Component c, fmi2Boolean toleranceDefined, fm
 	v[1] = 0;
 	v[2] = 0;
 
+	return fmi2OK;
+}
+
+fmi2Status fmi2EnterInitializationMode(fmi2Component c)
+{
+	return fmi2OK;
+}
+fmi2Status fmi2ExitInitializationMode(fmi2Component c)
+{ 
+	return fmi2OK;
+}
+fmi2Status fmi2Terminate(fmi2Component c)
+{ 
+	return fmi2OK;
+}
+fmi2Status fmi2Reset(fmi2Component c)
+{
+	return fmi2OK;
+}
+
+void fmi2FreeInstance(fmi2Component c)
+{ 
+	
+}
+
+fmi2Status fmi2GetReal(fmi2Component c, const fmi2ValueReference refs[], unsigned int n, fmi2Real vars[])
+{ 
+	for ( int i=0; i < n; i++)
+	{
+		if (refs[i] == 0) vars[i] = x[0];
+		else if (refs[i] == 1) vars[i] = x[1];
+	}
+	return fmi2OK;
+}
+
+fmi2Status fmi2SetReal(fmi2Component c, const fmi2ValueReference refs[], unsigned int n, const fmi2Real vars[])
+{ 
 	return fmi2OK;
 }
 
