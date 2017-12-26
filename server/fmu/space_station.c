@@ -1,5 +1,5 @@
 // SpaceStation - FMU
-// gcc -std=c11 -shared -Wall -o space_station_fmu.so space_station.c
+// gcc -std=c11 -shared -Wall -o space_station_fmu.so space_station.c -lm
 
 #include <math.h>
 
@@ -126,7 +126,7 @@ void gravitationalForce(double f[3], double r1[3],double r2[3], double m1, doubl
 {
 	double r;
 
-	r = sqrt(pow(r1[0]-r2[0],2) + pow(r1[1]-r2[1],2) + pow(r1[2]-r2[2],2));
+	r = sqrt(pow(r2[0]-r1[0],2) + pow(r2[1]-r1[1],2) + pow(r2[2]-r1[2],2));
 
 	f[0] = G * m1 * m2 * (r2[0]-r1[0]) / pow(r, 3);
 	f[1] = G * m1 * m2 * (r2[1]-r1[1]) / pow(r, 3);
