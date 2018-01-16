@@ -1,6 +1,6 @@
 <p>Newtonsches Gravitationsfeld.</p>
 <p id="formel">
-	$$ m_E \ddot{x}_E = \vec{F} $$
-	$$ m_S \ddot{x}_S = -\vec{F} $$
+	$$ m_E \ddot{\vec{x}}_E = \vec{F} $$
+	$$ m_S \ddot{\vec{x}}_S = -\vec{F} $$
 	$$ \vec{F} = G m_E m_S \frac{\vec{x}_S - \vec{x}_E}{|\vec{x}_S - \vec{x}_E|^3} $$
 </p>
