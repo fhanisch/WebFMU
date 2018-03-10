@@ -1,5 +1,0 @@
-<p id="formel">
-  \begin{equation}
-  \dot{x} = \frac{1}{T} (k-x)
-  \end{equation}
-</p>

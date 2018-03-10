@@ -1,5 +1,2 @@
 # WebFMU
-### Install PHP-Extension
-phpize  
-./configure  
-sudo make install  
+## Web Server for Simulation with FMU integration  
