@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="de">
+	<head>
+		<title>Grundstromkreis</title>
+		<meta charset="utf-8">
+		<script type="text/x-mathjax-config">
+			MathJax.Hub.Config({ TeX: { equationNumbers: {autoNumber: "AMS"} },
+										tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]} } );
+		</script>
+		<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-AMS_CHTML"></script>
+		<style>
+			body {
+				font-family: arial;
+				font-weight: bold;
+				font-size: 20px;
+				color: #2e8b57
+			}
+			h1 {
+				color: #ffffff;
+				background-color: #4169e1;
+				text-align: center;
+				font-size: 50px;
+				border-top: 2px solid #999999;
+				border-bottom: 2px solid #999999;
+			}
+			h2 {
+				font-weight: bold;
+				color: #ffffff;
+				background-color: #00cd66;
+				padding: .2em .5em;
+				margin-top: 1.5em;
+				border-top: 2px solid #999999;
+				border-bottom: 2px solid #999999;
+			}
+			img {
+  				width: 100%;
+  				height: auto;
+			}
+			#formel {
+				font-size: 22px;
+				color: #303030;
+			}
+			div {
+				color: #ffffff;
+				font-size: 36px;
+				border-radius: 1.0em 1.0em 1.0em;
+				border: 3px solid;
+				border-color: #4169e1;
+				background-color: #4169e1;
+				margin: 50px;
+				padding: 10px;
+				}
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1>Berechnungen am Grundstromkreis</h1>
+		</header>
+		<main>
+			<h2>Fragestellung</h2>
+			<img src=load?sites/Grundstromkreis.svg>
+			<h2>Gegeben</h2>
+			<p>$U_0, R_1, R_2, P_{EM_1}$</p>
+			<h2>Gesucht</h2>
+			<p>$P_{EM_2}$</p>
+			<h2>Randbedingung</h2>
+			<p>$P_{R_1} = P_{R_2}$</p>
+			<h2>Ansatz</h2>
+			<p ID="formel">
+				\begin{equation}
+				P_{R_1} = P_{R_2}
+				\end{equation}
+			</p>
+			<p ID="formel">
+				\begin{align}
+				R_1 i^2_1 = R_2 i^2_2 \quad &\to \quad i_2 = \sqrt{\frac{R_1}{R_2}} i_1 \label{gl_i_2} \\
+				U_{R_1} i_1 = U_{R_2} i_2 \quad &\to \quad U_{R_2} = U_{R_1} \frac{i_1}{i_2} \label{gl_u_R_2}
+				\end{align}
+			</p>
+			<p>(\ref{gl_i_2}) in (\ref{gl_u_R_2}):</p>
+			<p ID="formel">
+				\begin{equation}
+				U_{R_2} = U_{R_1}\frac{1}{\sqrt{\frac{R_1}{R_2}}} \label{gl2_u_r_2}
+				\end{equation}
+			</p>
+			<p ID="formel">
+				\begin{equation}
+				P_{EM_2} = U_{EM_2} i_2 \label{gl_p_em_2}
+				\end{equation}
+			</p>
+			<p ID="formel">
+				\begin{equation}
+				U_{EM_2} = U_0 - U_{R_2} \label{gl_u_em_2}
+				\end{equation}
+			</p>
+			<p>(\ref{gl2_u_r_2}) in (\ref{gl_u_em_2}):</p>
+			<p ID="formel">
+				\begin{equation}
+				U_{EM_2} = U_0 - U_{R_1}\frac{1}{\sqrt{\frac{R_1}{R_2}}} \label{gl2_u_em_2}
+				\end{equation}
+			</p>
+			<p>(\ref{gl2_u_em_2}) und (\ref{gl_i_2}) in (\ref{gl_p_em_2}):</p>
+			<p ID="formel">
+				\begin{equation}
+				P_{EM_2} = \left(U_0 - U_{R_1}\frac{1}{\sqrt{\frac{R_1}{R_2}}}\right) \sqrt{\frac{R_1}{R_2}} i_1
+				\end{equation}
+			</p>
+			<p>Durch Umformen ergibt sich:</p>
+			<p ID="formel">
+				\begin{equation}
+				P_{EM_2} = U_0 i_1 \sqrt{\frac{R_1}{R_2}} - U_{R_1} i_1 \label{gl2_p_em_2}
+				\end{equation}
+			</p>
+			<p>Maschensatz:</p>
+			<p ID="formel">
+				\begin{equation}
+				U_0 i_1 = U_{R_1} i_1 + P_{EM_1} \quad \to \quad U_{R_1} i_1 = U_0 i_1 - P_{EM_1} \label{gl_masche}
+				\end{equation}
+			</p>
+			<p>(\ref{gl_masche}) in (\ref{gl2_p_em_2}):</p>
+			<p ID="formel">
+				\begin{equation}
+				P_{EM_2} = U_0 i_1 \sqrt{\frac{R_1}{R_2}} - \left( U_0 i_1 - P_{EM_1} \right)
+				\end{equation}
+			</p>
+			<p>Durch Umformen ergibt sich:</p>
+			<p ID="formel">
+				\begin{equation}
+				P_{EM_2} = U_0 i_1 \left( \sqrt{\frac{R_1}{R_2}} - 1 \right) + P_{EM_1}
+				\end{equation}
+			</p>
+			<p>Berechnung des Stromes $i_1$ aus Maschensatz (Ansatz: Quadratische Gleichung $ax^2+bx+c=0$ mit der L�sung $x_{1,2}=\frac{-b \pm \sqrt{b^2-4ac}}{2a}$).</p>
+			<p ID="formel">
+				\begin{equation}
+				i_1 = \frac{-U_0 \pm \sqrt{U^2_0-4R_1 P_{EM_1}}}{-2R_1}
+				\end{equation}
+			</p>
+			<div>
+				<p>
+					\begin{equation*}
+					P_{EM_2} = U_0 i_1 \left( \sqrt{\frac{R_1}{R_2}} - 1 \right) + P_{EM_1}
+					\end{equation*}
+				</p>
+				<p>
+					\begin{equation*}
+					i_1 = \frac{-U_0 \pm \sqrt{U^2_0-4R_1 P_{EM_1}}}{-2R_1}
+					\end{equation*}
+				</p>
+			</div>
+		</main>
+	</body>
+</html>
