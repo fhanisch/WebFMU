@@ -494,25 +494,25 @@ int main(int argc, char *argv[])
 
 			if (strstr(recvbuf, "GET / HTTP/1.1"))
 			{
-				strcpy(loadPath + loadPathLen, "sites/index.html");
+				strcpy(loadPath + loadPathLen, "html/index.html");
 				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "max-age=3600", databuflen, "text/html");
 			}
 			else if (strstr(recvbuf, "GET /style.css"))
 			{
-				strcpy(loadPath + loadPathLen, "sites/style.css");
+				strcpy(loadPath + loadPathLen, "html/style.css");
 				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "max-age=3600", databuflen, "text/css");
 			}
 			else if (strstr(recvbuf, "GET /favicon"))
 			{
-				strcpy(loadPath + loadPathLen, "FMU_32x32.png");
+				strcpy(loadPath + loadPathLen, "res/FMU_32x32.png");
 				readFile(loadPath, &databuflen, &databuf, "rb");
 				sprintf(header, http_protocol, "max-age=3600", databuflen, "image/apng");
 			}
 			else if (strstr(recvbuf, "GET /logo"))
 			{
-				strcpy(loadPath + loadPathLen, "FMU.svg");
+				strcpy(loadPath + loadPathLen, "res/FMU.svg");
 				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
 			}

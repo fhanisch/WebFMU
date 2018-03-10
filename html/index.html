@@ -27,7 +27,7 @@
       <div id="err"></div>
       <p>
         <a href="/">Neu</a>
-        <a href="load?sites/result_table.html">Results</a>
+        <a href="load?html/result_table.html">Results</a>
         <a id="linkModelParam" href="tbd">Model Paramter</a>
         <a id="modelDescr" href="tbd">ModelDescription</a>
         <a href="load?log.txt">Log</a>
@@ -52,7 +52,7 @@
           var modelDescr = document.getElementById("modelDescr");
           modelDescr.setAttribute("href","load?fmu/" + options[selectedIndex].text + ".xml");
           var linkModelParam = document.getElementById("linkModelParam");
-          linkModelParam.setAttribute("href","load?sites/model_parameter.html&" + options[selectedIndex].text);
+          linkModelParam.setAttribute("href","load?html/model_parameter.html&" + options[selectedIndex].text);
         }
       };
       xhttp.open("GET", "modelmenu", true);
@@ -66,7 +66,7 @@
         var modelDescr = document.getElementById("modelDescr");
         modelDescr.setAttribute("href","load?fmu/" + options[selectedIndex].text + ".xml");
         var linkModelParam = document.getElementById("linkModelParam");
-        linkModelParam.setAttribute("href","load?sites/model_parameter.html&" + options[selectedIndex].text);
+        linkModelParam.setAttribute("href","load?html/model_parameter.html&" + options[selectedIndex].text);
         document.getElementById("sim").innerHTML = "";
       }
 
