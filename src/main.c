@@ -653,11 +653,31 @@ int main(int argc, char *argv[])
 					findNextToken(&ptr, linkModelParam);
 				}
 				strcpy(loadPath + loadPathLen, str);
-				readFile(loadPath, &databuflen, &databuf, "r");
-				if (strstr(str, "xml")) sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
-				else if (strstr(str, "txt")) sprintf(header, http_protocol, "no-store", databuflen, "text/plain");
-				else if (strstr(str, "svg")) sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
-				else sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+				if (strstr(str, "xml"))
+				{
+					readFile(loadPath, &databuflen, &databuf, "r");
+					sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
+				}
+				else if (strstr(str, "txt"))
+				{
+					readFile(loadPath, &databuflen, &databuf, "r");
+					sprintf(header, http_protocol, "no-store", databuflen, "text/plain");
+				}
+				else if (strstr(str, "svg"))
+				{
+					readFile(loadPath, &databuflen, &databuf, "r");
+					sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
+				}
+				else if (strstr(str, "bin") || strstr(str, "mat"))
+				{
+					readFile(loadPath, &databuflen, &databuf, "rb");
+					sprintf(header, http_protocol, "no-store", databuflen, "application/octet-stream");
+				}
+				else
+				{
+					readFile(loadPath, &databuflen, &databuf, "r");
+					sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+				}
 			}
 			else if (strstr(recvbuf, "POST /sim"))
 			{
