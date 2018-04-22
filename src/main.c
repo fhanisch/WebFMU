@@ -617,7 +617,7 @@ int main(int argc, char *argv[])
 							sprintf(str, "data/%s", fmuName);
 							strcpy(loadPath + loadPathLen, str);
 							stat(loadPath, &fileStat);
-							sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s'>%s</a></td><td>%d</td><td>%s</td></tr>", fmuName, fmuName, fileStat.st_size,ctime(&fileStat.st_mtime));
+							sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s' download='%s'>%s</a></td><td>%d</td><td>%s</td></tr>", fmuName, fmuName, fmuName, fileStat.st_size,ctime(&fileStat.st_mtime));
 						}
 					}
 					(void)closedir(dp);

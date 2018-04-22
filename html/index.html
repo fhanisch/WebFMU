@@ -245,9 +245,47 @@
             plotSlot+="<div id='plot_traj'></div>";
         }
         document.getElementById("plot").innerHTML = plotSlot;
-
-        document.getElementById("debug").innerHTML = "<p>"+resultFile+"</p>";
         
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+              var arrayBuffer = this.response;
+              if (arrayBuffer) {
+                var arrayPtr=0;
+                var nextDataElementPtr=128;
+                var dataElementCount = 0;
+                console.log(arrayBuffer.byteLength);
+                while (nextDataElementPtr<arrayBuffer.byteLength)
+                {
+                  arrayPtr = nextDataElementPtr;
+                  arrayPtr+=4;
+                  var data = new DataView(arrayBuffer);
+                  var next = data.getInt32(arrayPtr,true);
+                  nextDataElementPtr+=next+8;
+                  console.log(next);
+                  arrayPtr+=40;
+                  var arrayNameSize = data.getInt32(arrayPtr,true);
+                  console.log(arrayNameSize);
+                  arrayPtr+=4;
+                  var a = new Uint8Array(arrayBuffer,arrayPtr,arrayNameSize);
+                  var str = String.fromCharCode.apply(null,a);
+                  console.log(str);
+                  arrayPtr+=arrayNameSize+4;
+                  var arrayLength = data.getInt32(arrayPtr,true);
+                  console.log(arrayLength);
+                  arrayPtr+=4;
+                  var x = new Float64Array([1,2,3,4,5,6,7,8,9]);
+                  var y = new Float64Array(arrayBuffer,arrayPtr,9);
+                  document.getElementById("debug").innerHTML = "<p>"+str+"</p>";
+                  Plotly.newPlot( "plot"+dataElementCount, [{x: x,y: y}], {margin: { t: 0 } } );
+                  dataElementCount++;
+                }
+              }
+          }
+        };
+        xhttp.open("GET", resultFile, true);
+        xhttp.responseType = "arraybuffer";
+        xhttp.send();
       }
 
       function processData(allRows) {
