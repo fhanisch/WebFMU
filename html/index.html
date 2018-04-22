@@ -25,6 +25,7 @@
       <button type='button' onclick="simulate()">Simulate</button>
       <div id="sim"></div>
       <div id="err"></div>
+      <div id="debug"></div>
       <p>
         <a href="/">Neu</a>
         <a href="load?html/result_table.html">Results</a>
@@ -222,15 +223,12 @@
       function plot()
       {
         var name = document.getElementById("projektname").value;
-        resultFile = "load?data/"+name+".txt";
-        Plotly.d3.csv(resultFile, function(data){ processData(data) } );
-      }
-
-      function processData(allRows) {
+        resultFile = "load?data/"+name+".mat";
         var plotVars = [];
         var plotSlot = "";
         var variables = document.getElementsByClassName("variable");
         var j=0;
+
         for (i=0;i<variables.length;i++)
         {
           var index = variables[i].getAttribute("index");
@@ -247,6 +245,15 @@
             plotSlot+="<div id='plot_traj'></div>";
         }
         document.getElementById("plot").innerHTML = plotSlot;
+
+        document.getElementById("debug").innerHTML = "<p>"+resultFile+"</p>";
+        
+      }
+
+      function processData(allRows) {
+        
+        
+        
         for (j=0;j<plotVars.length;j++)
         {
           var x = [], y = [];

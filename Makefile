@@ -1,7 +1,11 @@
-all: webfmuserver install
+all: mat webfmuserver install
 
-webfmuserver: src/main.c
-	gcc -std=c11 -o webfmuserver src/main.c -ldl
+mat: matIO/matio.c
+	gcc -c -D LIB -o matio.o matIO/matio.c
+	ar cr libmatio.a matio.o
+
+webfmuserver: src/main.c libmatio.a
+	gcc -std=c11 -o webfmuserver src/main.c -L . -ldl -lmatio
 
 spacestation: src/space_station.c
 	gcc -std=c11 -shared -Wall -o fmu/space_station_fmu.so src/space_station.c -lm

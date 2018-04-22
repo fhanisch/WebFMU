@@ -17,6 +17,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include "fmi2FunctionTypes.h"
+#include "../matIO/matio.h"
 
 #define FALSE 0
 #define TRUE 1
@@ -215,27 +216,22 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 	int i = 0;
 	int j;
 	char str[128];
-	FILE *result;
+	FILE *matFile;
 	fmi2Real tolerance = 0.000001;
 	fmi2Real tStart = 0;
 	fmi2Real tComm = tStart;
 	fmi2Real tCommStep = 0.001; // FMU Exports duch OMC verwenden nur den Euler --> dort gibt es keine interne Schrittweite --> es wird nur die Kommunikationsschrittweite verwendet
 	fmi2Real tNextOut = tStart;
 	fmi2Status status = fmi2OK;
+	double *time;
+	double *out;
+	unsigned int elementCount = (unsigned int)(tStop / tOutStep) + 1 + 1;
 
-	result = fopen(resultFullFilePath, "w");
+	time = malloc(elementCount * sizeof(double));
+	out = malloc(elementCount * variables->noOfVars * sizeof(double));
 
 	strcpy(str, "Simulate FMU.\n");
 	fwrite(str, 1, strlen(str), logfile);
-
-	sprintf(str, "%s,%s", "index", "time");
-	fwrite(str, 1, strlen(str), result);
-	for (j = 0; j < variables->noOfVars; j++)
-	{
-		sprintf(str, ",%s", variables->varNames[j]);
-		fwrite(str, 1, strlen(str), result);
-	}
-	fwrite("\n", 1, 1, result);
 
 	if (fmi2SetupExperiment(fmuInstance, fmi2True, tolerance, tStart, fmi2False, tStop) != fmi2OK)
 	{
@@ -275,14 +271,10 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 		sprintf(str, "Error getReal!\n");
 		fwrite(str, 1, strlen(str), logfile);
 	}
-	sprintf(str, "%d,%0.3f", i, tComm);
-	fwrite(str, 1, strlen(str), result);
+	time[i] = tComm;
 	for (j = 0; j < variables->noOfVars; j++)
-	{
-		sprintf(str, ",%0.3f", variables->var[j]);
-		fwrite(str, 1, strlen(str), result);
-	}
-	fwrite("\n", 1, 1, result);
+		out[j*elementCount + i] = variables->var[j];
+
 	tNextOut += tOutStep;
 	
 	while (tComm < (tStop-0.00000001) && status == fmi2OK)
@@ -304,17 +296,20 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 		if (!(tComm < (tNextOut-0.00000001)))
 		{
 			i++;
-			sprintf(str, "%d,%0.3f", i, tComm);
-			fwrite(str, 1, strlen(str), result);
+			time[i] = tComm;
 			for (j = 0; j < variables->noOfVars; j++)
-			{
-				sprintf(str, ",%0.3f", variables->var[j]);
-				fwrite(str, 1, strlen(str), result);
-			}
-			fwrite("\n", 1, 1, result);
+				out[j*elementCount + i] = variables->var[j];
+
 			tNextOut += tOutStep;
 		}
 	}
+	
+	matFile = fopen(resultFullFilePath, "wb");
+	writeHeader("Created by WebFMU", matFile);
+	writeDoubleMatrix("time", time, i + 1, 1, matFile);
+	for (j = 0; j < variables->noOfVars; j++)
+		writeDoubleMatrix((char*)variables->varNames[j], &out[j*elementCount], i + 1, 1, matFile);
+	fclose(matFile);
 	
 	char *ptr = resultFullFilePath;
 	char *tmp;
@@ -336,9 +331,9 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 
 	strcpy(str, "Simulation succesfully terminated.\n");
 	fwrite(str, 1, strlen(str), logfile);
-	//printf("%s", str);
-	fclose(result);
 
+	free(time);
+	free(out);
 	return 0;
 }
 
@@ -616,7 +611,7 @@ int main(int argc, char *argv[])
 						if (findNextToken(&ptr, fmuName)) continue;
 						if (findNextToken(&ptr, token)) continue;
 	
-						if (!strcmp(token, "txt"))
+						if (!strcmp(token, "mat"))
 						{
 							sprintf(fmuName, "%s.%s", fmuName, token);
 							sprintf(str, "data/%s", fmuName);
@@ -696,7 +691,7 @@ int main(int argc, char *argv[])
 					else if (!strcmp(token, "projname"))
 					{
 						findNextToken(&ptr, token);
-						sprintf(resultFileName, "%s%s", token, ".txt");
+						sprintf(resultFileName, "%s%s", token, ".mat");
 					}
 					else if (!strcmp(token, "tstop"))
 					{
