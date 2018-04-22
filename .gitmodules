@@ -1,0 +1,3 @@
+[submodule "matIO"]
+	path = matIO
+	url = https://github.com/fhanisch/matIO.git
