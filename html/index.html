@@ -285,15 +285,15 @@
                       var x = new Float64Array(arrayBuffer,arrayPtr,arrayLength/8);
                   }
                   if ((dataElementCount>0) && (plotVars.length!=2))
-                    makePlotly( time, x, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1));
+                    makePlotly( time, x, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1),500);
                   else if ((dataElementCount==1) && (plotVars.length==2))
-                    makePlotly( time, x, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1));
+                    makePlotly( time, x, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1),500);
                   else if ((dataElementCount==2) && (plotVars.length==2))
-                    makePlotly( time, y, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1));
+                    makePlotly( time, y, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1),500);
                   dataElementCount++;
                 }
                 if (plotVars.length==2)
-                  makePlotly( x, y, plotVars[0], plotVars[1], "plot_traj");
+                  makePlotly( x, y, plotVars[0], plotVars[1], "plot_traj",800);
               }
           }
         };
@@ -302,7 +302,7 @@
         xhttp.send();
       }
 
-      function makePlotly( x, y, xLabel, yLabel, plotField){
+      function makePlotly( x, y, xLabel, yLabel, plotField, height){
         var name = document.getElementById("projektname").value;
         var traces = [{
           x: x,
@@ -310,7 +310,7 @@
           mode: 'lines',marker: {color: 'rgb(219, 64, 82)',size : 12}
         }];
         var layout = {
-		      height: 500,
+		      height: height,
           title: name,
 		      xaxis: {title: xLabel},
           yaxis: {title: yLabel}
