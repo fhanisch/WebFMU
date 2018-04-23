@@ -25,7 +25,6 @@
       <button type='button' onclick="simulate()">Simulate</button>
       <div id="sim"></div>
       <div id="err"></div>
-      <div id="debug"></div>
       <p>
         <a href="/">Neu</a>
         <a href="load?html/result_table.html">Results</a>
@@ -274,44 +273,33 @@
                   var arrayLength = data.getInt32(arrayPtr,true);
                   console.log(arrayLength);
                   arrayPtr+=4;
-                  var x = new Float64Array([1,2,3,4,5,6,7,8,9]);
-                  var y = new Float64Array(arrayBuffer,arrayPtr,9);
-                  document.getElementById("debug").innerHTML = "<p>"+str+"</p>";
-                  Plotly.newPlot( "plot"+dataElementCount, [{x: x,y: y}], {margin: { t: 0 } } );
+                  if ( dataElementCount==0)
+                  {
+                    var time = new Float64Array(arrayBuffer,arrayPtr,arrayLength/8);
+                  }
+                  else
+                  {
+                    if ((plotVars.length==2) && (dataElementCount==2))
+                      var y = new Float64Array(arrayBuffer,arrayPtr,arrayLength/8);
+                    else
+                      var x = new Float64Array(arrayBuffer,arrayPtr,arrayLength/8);
+                  }
+                  if ((dataElementCount>0) && (plotVars.length!=2))
+                    makePlotly( time, x, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1));
+                  else if ((dataElementCount==1) && (plotVars.length==2))
+                    makePlotly( time, x, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1));
+                  else if ((dataElementCount==2) && (plotVars.length==2))
+                    makePlotly( time, y, "Time [s]", plotVars[dataElementCount-1], "plot"+(dataElementCount-1));
                   dataElementCount++;
                 }
+                if (plotVars.length==2)
+                  makePlotly( x, y, plotVars[0], plotVars[1], "plot_traj");
               }
           }
         };
         xhttp.open("GET", resultFile, true);
         xhttp.responseType = "arraybuffer";
         xhttp.send();
-      }
-
-      function processData(allRows) {
-        
-        
-        
-        for (j=0;j<plotVars.length;j++)
-        {
-          var x = [], y = [];
-          for (var i=0; i<allRows.length; i++) {
-              row = allRows[i];
-              x.push( row['time'] );
-              y.push( row[plotVars[j]] );
-          }
-          makePlotly( x, y, "Time [s]", plotVars[j], "plot"+j);
-        }
-        if (plotVars.length==2)
-        {
-          var x = [], y = [];
-          for (var i=0; i<allRows.length; i++) {
-              row = allRows[i];
-              x.push( row[plotVars[0]] );
-              y.push( row[plotVars[1]] );
-          }
-          makePlotly( x, y, plotVars[0], plotVars[1], "plot_traj");
-        }
       }
 
       function makePlotly( x, y, xLabel, yLabel, plotField){
