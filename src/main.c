@@ -362,6 +362,9 @@ int main(int argc, char *argv[])
 {
 	int acceptSocket, serverSocket;
 	struct sockaddr_in addr;
+	struct sockaddr_in client_addr;
+	socklen_t addrlen;
+	char *str_client_ip;
 	int port = 80;
 	bool quitServer = FALSE;
 	bool quitConnection;
@@ -464,14 +467,16 @@ int main(int argc, char *argv[])
 	while (!quitServer)
 	{
 		printf("Wait for connection...\n\n");
-		serverSocket = accept(acceptSocket, NULL, NULL);
+		serverSocket = accept(acceptSocket, (struct sockaddr*)&client_addr, &addrlen);
 		if (serverSocket<0)
 		{
 			printf("Connection failed!\n");
 			close(acceptSocket);
 			return 1;
 		}
-		printf("Connection accepted.\n\n");
+		str_client_ip = inet_ntoa(client_addr.sin_addr);
+		printf("Connection accepted.\n");
+		printf("Connected with %s.\n\n", str_client_ip);
 
 		quitConnection = FALSE;
 		while (!quitConnection || persistentConnection)
@@ -676,99 +681,109 @@ int main(int argc, char *argv[])
 			}
 			else if (strstr(recvbuf, "POST /sim"))
 			{
-				strcpy(loadPath + loadPathLen, "log.txt");
-				logfile = fopen(loadPath, "w");
 				ptr = strstr(recvbuf, "projname");
-				variables.noOfParam = 0;
-				variables.noOfVars = 0;
-				while (!findNextToken(&ptr, token))
+				if (ptr)
 				{
-					if (!strcmp(token, "fmuname"))
+					strcpy(loadPath + loadPathLen, "log.txt");
+					logfile = fopen(loadPath, "w");
+					variables.noOfParam = 0;
+					variables.noOfVars = 0;
+					while (!findNextToken(&ptr, token))
 					{
-						findNextToken(&ptr, token);
-						sprintf(fmuFileName, "%s%s", token, ".so");
+						if (!strcmp(token, "fmuname"))
+						{
+							findNextToken(&ptr, token);
+							sprintf(fmuFileName, "%s%s", token, ".so");
+						}
+						else if (!strcmp(token, "projname"))
+						{
+							findNextToken(&ptr, token);
+							sprintf(resultFileName, "%s%s", token, ".mat");
+						}
+						else if (!strcmp(token, "tstop"))
+						{
+							getNextDelimiter(&ptr, "=");
+							sscanf(ptr, "%lf", &tstop);
+						}
+						else if (!strcmp(token, "tOutStep"))
+						{
+							getNextDelimiter(&ptr, "=");
+							sscanf(ptr, "%lf", &tOutStep);
+						}
+						else if (!strcmp(token, "pname"))
+						{
+							ptr++;
+							sscanf(ptr, "%d", &i);
+							findNextToken(&ptr, token);
+							variables.paramNames[i] = malloc(strlen(token));
+							strcpy((char*)variables.paramNames[i], token);
+							variables.noOfParam++;
+						}
+						else if (!strcmp(token, "pref"))
+						{
+							ptr++;
+							sscanf(ptr, "%d", &i);
+							getNextDelimiter(&ptr, "=");
+							sscanf(ptr, "%d", &variables.paramRefs[i]);
+						}
+						else if (!strcmp(token, "pval"))
+						{
+							ptr++;
+							sscanf(ptr, "%d", &i);
+							getNextDelimiter(&ptr, "=");
+							sscanf(ptr, "%lf", &variables.parameter[i]);
+						}
+						else if (!strcmp(token, "vname"))
+						{
+							ptr++;
+							sscanf(ptr, "%d", &i);
+							findNextTokenLimited(&ptr, token, '&');
+							variables.varNames[i] = malloc(strlen(token));
+							strcpy((char*)variables.varNames[i], token);
+							variables.noOfVars++;
+						}
+						else if (!strcmp(token, "vref"))
+						{
+							ptr++;
+							sscanf(ptr, "%d", &i);
+							getNextDelimiter(&ptr, "=");
+							sscanf(ptr, "%d", &variables.varRefs[i]);
+						}
 					}
-					else if (!strcmp(token, "projname"))
+					sprintf(fmuFullFilePath, "%s%s%s", argv[0], fmuPath, fmuFileName);
+					sprintf(resultFullFilePath, "%s%s%s", argv[0], resultFilePath, resultFileName);
+					databuf = malloc(5000);
+					if (!initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath))
 					{
-						findNextToken(&ptr, token);
-						sprintf(resultFileName, "%s%s", token, ".mat");
-					}
-					else if (!strcmp(token, "tstop"))
-					{
-						getNextDelimiter(&ptr, "=");
-						sscanf(ptr, "%lf", &tstop);
-					}
-					else if (!strcmp(token, "tOutStep"))
-					{
-						getNextDelimiter(&ptr, "=");
-						sscanf(ptr, "%lf", &tOutStep);
-					}
-					else if (!strcmp(token, "pname"))
-					{
-						ptr++;
-						sscanf(ptr, "%d", &i);
-						findNextToken(&ptr, token);
-						variables.paramNames[i] = malloc(strlen(token));
-						strcpy((char*)variables.paramNames[i], token);
-						variables.noOfParam++;
-					}
-					else if (!strcmp(token, "pref"))
-					{
-						ptr++;
-						sscanf(ptr, "%d", &i);
-						getNextDelimiter(&ptr, "=");
-						sscanf(ptr, "%d", &variables.paramRefs[i]);
-					}
-					else if (!strcmp(token, "pval"))
-					{
-						ptr++;
-						sscanf(ptr, "%d", &i);
-						getNextDelimiter(&ptr, "=");
-						sscanf(ptr, "%lf", &variables.parameter[i]);
-					}
-					else if (!strcmp(token, "vname"))
-					{
-						ptr++;
-						sscanf(ptr, "%d", &i);
-						findNextTokenLimited(&ptr, token, '&');
-						variables.varNames[i] = malloc(strlen(token));
-						strcpy((char*)variables.varNames[i], token);
-						variables.noOfVars++;
-					}
-					else if (!strcmp(token, "vref"))
-					{
-						ptr++;
-						sscanf(ptr, "%d", &i);
-						getNextDelimiter(&ptr, "=");
-						sscanf(ptr, "%d", &variables.varRefs[i]);
-					}
-				}
-				sprintf(fmuFullFilePath, "%s%s%s", argv[0], fmuPath, fmuFileName);
-				sprintf(resultFullFilePath, "%s%s%s", argv[0], resultFilePath, resultFileName);
-				databuf = malloc(5000);
-				if (!initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath))
-				{
-					if (!simulate(resultFullFilePath, tstop, tOutStep, &variables, databuf))
-					{
-						sprintf(databuf + strlen(databuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
-							"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
+						if (!simulate(resultFullFilePath, tstop, tOutStep, &variables, databuf))
+						{
+							sprintf(databuf + strlen(databuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
+								"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
+						}
+						else
+						{
+							strcat(databuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
+						}
+						//fmi2Terminate(fmuInstance);
+						//fmi2Reset(fmuInstance);
+						fmi2FreeInstance(fmuInstance);
+						dlclose(handle);
 					}
 					else
 					{
-						strcat(databuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
+						sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
 					}
-					//fmi2Terminate(fmuInstance);
-					//fmi2Reset(fmuInstance);
-					fmi2FreeInstance(fmuInstance);
-					dlclose(handle);
+					databuflen = strlen(databuf);
+					sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+					fclose(logfile);
 				}
 				else
 				{
-					sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
+					databuf = malloc(128);
+					strcpy(databuf, "<p style='font-size:100px;text-align:center'>Incorrect Post Data!</p>");
+					databuflen = strlen(databuf);
+					sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 				}
-				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-				fclose(logfile);
 			}
 			else
 			{
