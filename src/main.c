@@ -371,6 +371,7 @@ int main(int argc, char *argv[])
 	bool persistentConnection = TRUE;
 	char str[128];
 	char recvbuf[1024];
+	unsigned int headerlen;
 	char *sendbuf;
 	char *databuf;
 	int sendbuflen;
@@ -491,6 +492,13 @@ int main(int argc, char *argv[])
 			}
 			recvbuf[numbytes] = 0;
 			printf("%d bytes received:\n%s\n\n", numbytes, recvbuf);
+			if (ptr = strstr(recvbuf, "\r\n\r\n"))
+			{
+				ptr += 4;
+				headerlen = ptr - recvbuf;
+				printf("Length of header: %d\n\n", headerlen);
+			}
+
 
 			if (strstr(recvbuf, "GET / HTTP/1.1"))
 			{
@@ -681,6 +689,26 @@ int main(int argc, char *argv[])
 			}
 			else if (strstr(recvbuf, "POST /sim"))
 			{
+				ptr = strstr(recvbuf, "Content-Length");
+				if (!findNextTokenLimited(&ptr, token, ':'))
+				{
+					printf("%s: ", token);
+					ptr++;
+					sscanf(ptr, "%d", &i);
+					printf("%d\n\n", i);
+					if (numbytes < (headerlen + i))
+					{
+						if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
+						{
+							printf("receiving failed!\n");
+							quitConnection = TRUE;
+							break;
+						}
+						recvbuf[numbytes] = 0;
+						printf("!!!!!!!!!!!!! %d bytes of content received:\n%s\n\n", numbytes, recvbuf);
+					}
+				}
+
 				ptr = strstr(recvbuf, "projname");
 				if (ptr)
 				{
