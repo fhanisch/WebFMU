@@ -22,12 +22,30 @@
 #define FALSE 0
 #define TRUE 1
 
+#define LOG
+#ifdef LOG
+
+#	define PRINT(...)										\
+				logfile = fopen(logfilepath, "a");			\
+				sprintf(logbuf, __VA_ARGS__);				\
+				fwrite(logbuf, 1, strlen(logbuf), logfile);	\
+				fclose(logfile);
+
+#elif defined NOLOG
+
+#	define PRINT(...)
+
+#else
+
+#	define PRINT(...) printf(__VA_ARGS__);
+
+#endif
+
 #define FMI_GET_FUNC_ADDR( fun )						\
 			fun = (fun##TYPE*)dlsym(handle, #fun);		\
 			if (fun == NULL)							\
 			{											\
-				sprintf(str,"Load %s failed!\n",#fun);	\
-				fwrite(str, 1, strlen(str), logfile);	\
+				PRINT("Load %s failed!\n",#fun);		\
 				return -1;								\
 			}
 
@@ -67,6 +85,8 @@ fmi2ResetTYPE *fmi2Reset;
 fmi2FreeInstanceTYPE *fmi2FreeInstance;
 static fmi2Component fmuInstance;
 static FILE *logfile;
+char logbuf[1024];
+char logfilepath[256];
 
 char getNextDelimiter(char **src, char *delimiter)
 {
@@ -144,23 +164,18 @@ void freeMemory(void* obj)
 
 void logger(fmi2ComponentEnvironment a, fmi2String b, fmi2Status c, fmi2String d, fmi2String e, ...)
 {
-	char str[256];
-	sprintf(str, "Logger: %s %s %s\n", b, d, e);
-	fwrite(str, 1, strlen(str), logfile);
+	PRINT("Logger: %s %s %s\n", b, d, e);
 }
 
 fmi2CallbackFunctions callbacks = { logger, allocateMemory, freeMemory, NULL, NULL };
 
 int initFMU(fmi2String instanceName, fmi2String guid, fmi2String fmuResourcesLocation, char *fmuFullFilePath)
 {
-	char str[128];
-	sprintf(str, "Lade FMU: %s\n", fmuFullFilePath);
-	fwrite(str, 1, strlen(str), logfile);
+	PRINT("Lade FMU: %s\n", fmuFullFilePath);
 	handle = dlopen(fmuFullFilePath, RTLD_LAZY);
 	if (!handle)
 	{
-		strcpy(str, "dlopen failed!\n");
-		fwrite(str, 1, strlen(str), logfile);
+		PRINT("dlopen failed!\n");
 		return -1;
 	}
 
@@ -176,21 +191,16 @@ int initFMU(fmi2String instanceName, fmi2String guid, fmi2String fmuResourcesLoc
 	FMI_GET_FUNC_ADDR(fmi2Reset)
 	FMI_GET_FUNC_ADDR(fmi2FreeInstance)
 
-	sprintf(str, "FMI-Version: %s\n", fmi2GetVersion());
-	fwrite(str, 1, strlen(str), logfile);
+	PRINT("FMI-Version: %s\n", fmi2GetVersion());
 
-	sprintf(str, "GUID: %s\n", guid);
-	fwrite(str, 1, strlen(str), logfile);
+	PRINT("GUID: %s\n", guid);
 	fmuInstance = fmi2Instantiate(instanceName, fmi2CoSimulation, guid, fmuResourcesLocation, &callbacks, fmi2False, fmi2False);
 	if (fmuInstance == NULL)
 	{
-		strcpy(str, "Get fmu instance failed!\n");
-		fwrite(str, 1, strlen(str), logfile);
+		PRINT("Get fmu instance failed!\n");
 		return -1;
 	}
-	strcpy(str, "FMU instanciated.\n");
-	fwrite(str, 1, strlen(str), logfile);
-	//printf("%s", str);
+	PRINT("FMU instanciated.\n");
 
 	return 0;
 }
@@ -215,7 +225,6 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 {
 	int i = 0;
 	int j;
-	char str[128];
 	FILE *matFile;
 	fmi2Real tolerance = 0.000001;
 	fmi2Real tStart = 0;
@@ -230,46 +239,36 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 	time = malloc(elementCount * sizeof(double));
 	out = malloc(elementCount * variables->noOfVars * sizeof(double));
 
-	strcpy(str, "Simulate FMU.\n");
-	fwrite(str, 1, strlen(str), logfile);
+	PRINT("Simulate FMU.\n");
 
 	if (fmi2SetupExperiment(fmuInstance, fmi2True, tolerance, tStart, fmi2False, tStop) != fmi2OK)
 	{
-		sprintf(str, "Experiment setup failed!\n");
-		fwrite(str, 1, strlen(str), logfile);
-		fclose(logfile);
+		PRINT("Experiment setup failed!\n");
 		return -1;
 	}
 
 	if (fmi2SetReal(fmuInstance, variables->paramRefs, variables->noOfParam, variables->parameter) != fmi2OK)
 	{
-		sprintf(str, "Set real failed!\n");
-		fwrite(str, 1, strlen(str), logfile);
-		fclose(logfile);
+		PRINT("Set real failed!\n");
 		return -1;
 	}
 
 	if (fmi2EnterInitializationMode(fmuInstance) != fmi2OK)
 	{
-		sprintf(str, "EnterInitializationMode failed!\n");
-		fwrite(str, 1, strlen(str), logfile);
-		fclose(logfile);
+		PRINT("EnterInitializationMode failed!\n");
 		return -1;
 	}
 
 	if (fmi2ExitInitializationMode(fmuInstance) != fmi2OK)
 	{
-		sprintf(str, "ExitInitializationMode failed!\n");
-		fwrite(str, 1, strlen(str), logfile);
-		fclose(logfile);
+		PRINT("ExitInitializationMode failed!\n");
 		return -1;
 	}
 
 	status = fmi2GetReal(fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
 	if (status != fmi2OK)
 	{
-		sprintf(str, "Error getReal!\n");
-		fwrite(str, 1, strlen(str), logfile);
+		PRINT("Error getReal!\n");
 	}
 	time[i] = tComm;
 	for (j = 0; j < variables->noOfVars; j++)
@@ -282,16 +281,14 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 		status = fmi2DoStep(fmuInstance, tComm, tCommStep, fmi2True);
 		if (status != fmi2OK)
 		{
-			sprintf(str, "Error doStep!\n");
-			fwrite(str, 1, strlen(str), logfile);
+			PRINT("Error doStep!\n");
 		}
 		tComm += tCommStep;
 
 		status = fmi2GetReal(fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
 		if (status != fmi2OK)
 		{
-			sprintf(str, "Error getReal!\n");
-			fwrite(str, 1, strlen(str), logfile);
+			PRINT("Error getReal!\n");
 		}
 		if (!(tComm < (tNextOut-0.00000001)))
 		{
@@ -329,8 +326,7 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 	}
 	sprintf(htmlbuf + strlen(htmlbuf), "</table>");
 
-	strcpy(str, "Simulation succesfully terminated.\n");
-	fwrite(str, 1, strlen(str), logfile);
+	PRINT("Simulation succesfully terminated.\n");
 
 	free(time);
 	free(out);
@@ -396,31 +392,36 @@ int main(int argc, char *argv[])
 	fmi2String fmuResourcesLocation = NULL;
 	char *ptr;
 
-	printf("Web FMU Server\n\n");
-	
 	ptr = argv[0];
 	char *tmp = ptr;
 	while (getNextDelimiter(&ptr, "/")) { tmp = ptr; }
 	*tmp = 0;
 	strcpy(loadPath, argv[0]);
 	loadPathLen = strlen(loadPath);
+	strcpy(loadPath + loadPathLen, "log.txt");
+	strcpy(logfilepath, loadPath);
+	logfile = fopen(logfilepath, "w");
+	fclose(logfile);
 	//printf("%s\n\n", loadPath);
+
+	PRINT("Web FMU Server\n\n");
+
 	for (i = 1; i < argc; i++)
 	{
 		if (!strcmp(argv[i], "-c"))
 		{
 			persistentConnection = FALSE;
-			printf("set connection type = closed\n\n");
+			PRINT("set connection type = closed\n\n");
 		}
 		else if (!strcmp(argv[i], "-p"))
 		{
 			persistentConnection = TRUE;
-			printf("set connection type = persistent\n\n");
+			PRINT("set connection type = persistent\n\n");
 		}
 		else if (!strcmp(argv[i], "-port"))
 		{
 			sscanf(argv[i + 1], "%d", &port);
-			printf("set port = %d\n", port);
+			PRINT("set port = %d\n", port);
 			i++;
 		}
 		else if (!strcmp(argv[i], "-h"))
@@ -454,7 +455,7 @@ int main(int argc, char *argv[])
 		close(acceptSocket);
 		return 1;
 	}
-	printf("Bind Socket with Port: %d\n", port);
+	PRINT("Bind Socket with Port: %d\n", port);
 
 	if (listen(acceptSocket, 10)<0)
 	{
@@ -463,11 +464,11 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	printf("Server started ...\n");
+	PRINT("Server started ...\n");
 
 	while (!quitServer)
 	{
-		printf("Wait for connection...\n\n");
+		PRINT("Wait for connection...\n\n");
 		serverSocket = accept(acceptSocket, (struct sockaddr*)&client_addr, &addrlen);
 		if (serverSocket<0)
 		{
@@ -476,29 +477,28 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 		str_client_ip = inet_ntoa(client_addr.sin_addr);
-		printf("Connection accepted.\n");
-		printf("Connected with %s.\n\n", str_client_ip);
+		PRINT("Connection accepted.\n");
+		PRINT("Connected with %s.\n\n", str_client_ip);
 
 		quitConnection = FALSE;
 		while (!quitConnection || persistentConnection)
 		{
 			databuf = NULL;
-			printf("receiving...\n\n");
+			PRINT("receiving...\n\n");
 			if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
 			{
-				printf("receiving failed!\n");
+				PRINT("receiving failed!\n");
 				quitConnection = TRUE;
 				break;
 			}
 			recvbuf[numbytes] = 0;
-			printf("%d bytes received:\n%s\n\n", numbytes, recvbuf);
+			PRINT("%d bytes received:\n%s\n\n", numbytes, recvbuf);
 			if (ptr = strstr(recvbuf, "\r\n\r\n"))
 			{
 				ptr += 4;
 				headerlen = ptr - recvbuf;
-				printf("Length of header: %d\n\n", headerlen);
+				PRINT("Length of header: %d\n\n", headerlen);
 			}
-
 
 			if (strstr(recvbuf, "GET / HTTP/1.1"))
 			{
@@ -692,28 +692,26 @@ int main(int argc, char *argv[])
 				ptr = strstr(recvbuf, "Content-Length");
 				if (!findNextTokenLimited(&ptr, token, ':'))
 				{
-					printf("%s: ", token);
+					PRINT("%s: ", token);
 					ptr++;
 					sscanf(ptr, "%d", &i);
-					printf("%d\n\n", i);
+					PRINT("%d\n\n", i);
 					if (numbytes < (headerlen + i))
 					{
 						if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
 						{
-							printf("receiving failed!\n");
+							PRINT("receiving failed!\n");
 							quitConnection = TRUE;
 							break;
 						}
 						recvbuf[numbytes] = 0;
-						printf("!!!!!!!!!!!!! %d bytes of content received:\n%s\n\n", numbytes, recvbuf);
+						PRINT("!!!!!!!!!!!!! %d bytes of content received:\n%s\n\n", numbytes, recvbuf);
 					}
 				}
 
 				ptr = strstr(recvbuf, "projname");
 				if (ptr)
 				{
-					strcpy(loadPath + loadPathLen, "log.txt");
-					logfile = fopen(loadPath, "w");
 					variables.noOfParam = 0;
 					variables.noOfVars = 0;
 					while (!findNextToken(&ptr, token))
@@ -803,7 +801,6 @@ int main(int argc, char *argv[])
 					}
 					databuflen = strlen(databuf);
 					sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-					fclose(logfile);
 				}
 				else
 				{
@@ -834,8 +831,8 @@ int main(int argc, char *argv[])
 				free(databuf);
 				break;
 			}
-			printf("%d Bytes sent.\n", numbytes);
-			printf("Header:\n%s\n\n", header);
+			PRINT("%d Bytes sent.\n", numbytes);
+			PRINT("Header:\n%s\n\n", header);
 
 			free(sendbuf);
 			free(databuf);
