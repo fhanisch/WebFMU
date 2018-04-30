@@ -28,15 +28,15 @@
 #define FALSE 0
 #define TRUE 1
 #define MAX_THREAD_COUNT 10
-#define NOLOG
+//#define NOLOG
 
 #ifdef LOG
 
-	#define PRINT(...)										\
-				logfile = fopen(logfilepath, "a");			\
-				sprintf(logbuf, __VA_ARGS__);				\
-				fwrite(logbuf, 1, strlen(logbuf), logfile);	\
-				fclose(logfile);
+    #define PRINT(...)                                      \
+                logfile = fopen(logfilepath, "a");          \
+                sprintf(logbuf, __VA_ARGS__);               \
+                fwrite(logbuf, 1, strlen(logbuf), logfile); \
+                fclose(logfile);
 
 #elif defined NOLOG
 
@@ -48,13 +48,13 @@
 
 #endif
 
-#define FMI_GET_FUNC_ADDR( fun )						\
-			fmu->fun = (fun##TYPE*)dlsym(fmu->handle, #fun);		\
-			if (fmu->fun == NULL)							\
-			{											\
-				PRINT("Load %s failed!\n",#fun);		\
-				return -1;								\
-			}
+#define FMI_GET_FUNC_ADDR( fun )                                    \
+                fmu->fun = (fun##TYPE*)dlsym(fmu->handle, #fun);    \
+                if (fmu->fun == NULL)                               \
+                {                                                   \
+                    PRINT("Load %s failed!\n",#fun);                \
+                    return -1;                                      \
+                }
 
 typedef int bool;
 
@@ -96,12 +96,12 @@ typedef struct{
 } ThreadArguments;
 
 char header[512];
-const char http_protocol[] =	"HTTP/1.1 200 OK\r\n"
-								"Server: WebFMU Server\r\n"
-								"Keep-Alive: timeout=20, max=50\r\n"
-								"Cache-Control: %s\r\n"
-								"Content-Length: %d\r\n"
-								"Content-Type: %s\r\n\r\n";
+const char http_protocol[] =    "HTTP/1.1 200 OK\r\n"
+                                "Server: WebFMU Server\r\n"
+                                "Keep-Alive: timeout=20, max=50\r\n"
+                                "Cache-Control: %s\r\n"
+                                "Content-Length: %d\r\n"
+                                "Content-Type: %s\r\n\r\n";
 
 static FILE *logfile;
 char logbuf[1024];
