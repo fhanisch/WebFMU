@@ -2,7 +2,7 @@
 /// @author: fh
 
 /*
-	compile: gcc -std=c11 -o webfmuserver server.c -ldl
+	compile: gcc -std=c11 -Wall -o webfmuserver src/main.c -L . -ldl -lmatio -pthread
 	Wichtig: Cache-Control im Header beachten !!! --> Wann müssen welche Seiten aktualisiert werden?
 */
 
@@ -16,16 +16,18 @@
 #include <dlfcn.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <pthread.h>
 #include "fmi2FunctionTypes.h"
 #include "../matIO/matio.h"
 
 #define FALSE 0
 #define TRUE 1
+#define MAX_THREAD_COUNT 10
+//#define LOG
 
-#define LOG
 #ifdef LOG
 
-#	define PRINT(...)										\
+	#define PRINT(...)										\
 				logfile = fopen(logfilepath, "a");			\
 				sprintf(logbuf, __VA_ARGS__);				\
 				fwrite(logbuf, 1, strlen(logbuf), logfile);	\
@@ -33,23 +35,39 @@
 
 #elif defined NOLOG
 
-#	define PRINT(...)
+	#define PRINT(...)
 
 #else
 
-#	define PRINT(...) printf(__VA_ARGS__);
+	#define PRINT(...) printf(__VA_ARGS__);
 
 #endif
 
 #define FMI_GET_FUNC_ADDR( fun )						\
-			fun = (fun##TYPE*)dlsym(handle, #fun);		\
-			if (fun == NULL)							\
+			fmu->fun = (fun##TYPE*)dlsym(fmu->handle, #fun);		\
+			if (fmu->fun == NULL)							\
 			{											\
 				PRINT("Load %s failed!\n",#fun);		\
 				return -1;								\
 			}
 
 typedef int bool;
+
+typedef struct {
+	void *handle;
+	fmi2GetVersionTYPE *fmi2GetVersion;
+	fmi2InstantiateTYPE *fmi2Instantiate;
+	fmi2SetupExperimentTYPE *fmi2SetupExperiment;
+	fmi2SetRealTYPE *fmi2SetReal;
+	fmi2EnterInitializationModeTYPE *fmi2EnterInitializationMode;
+	fmi2ExitInitializationModeTYPE *fmi2ExitInitializationMode;
+	fmi2DoStepTYPE *fmi2DoStep;
+	fmi2GetRealTYPE *fmi2GetReal;
+	fmi2TerminateTYPE *fmi2Terminate;
+	fmi2ResetTYPE *fmi2Reset;
+	fmi2FreeInstanceTYPE *fmi2FreeInstance;
+	fmi2Component fmuInstance;
+} FMU_Instance;
 
 typedef struct
 {
@@ -63,6 +81,15 @@ typedef struct
 	fmi2String varNames[100];
 } Variables;
 
+typedef struct{
+	pthread_t *threadID;
+	unsigned int threadIndex;
+	int serverSocket;
+	bool *quitServer;
+	bool persistentConnection;
+	char *cd;
+} ThreadArguments;
+
 char header[512];
 const char http_protocol[] =	"HTTP/1.1 200 OK\r\n"
 								"Server: WebFMU Server\r\n"
@@ -71,19 +98,6 @@ const char http_protocol[] =	"HTTP/1.1 200 OK\r\n"
 								"Content-Length: %d\r\n"
 								"Content-Type: %s\r\n\r\n";
 
-static void *handle;
-fmi2GetVersionTYPE *fmi2GetVersion;
-fmi2InstantiateTYPE *fmi2Instantiate;
-fmi2SetupExperimentTYPE *fmi2SetupExperiment;
-fmi2SetRealTYPE *fmi2SetReal;
-fmi2EnterInitializationModeTYPE *fmi2EnterInitializationMode;
-fmi2ExitInitializationModeTYPE *fmi2ExitInitializationMode;
-fmi2DoStepTYPE *fmi2DoStep;
-fmi2GetRealTYPE *fmi2GetReal;
-fmi2TerminateTYPE *fmi2Terminate;
-fmi2ResetTYPE *fmi2Reset;
-fmi2FreeInstanceTYPE *fmi2FreeInstance;
-static fmi2Component fmuInstance;
 static FILE *logfile;
 char logbuf[1024];
 char logfilepath[256];
@@ -169,11 +183,11 @@ void logger(fmi2ComponentEnvironment a, fmi2String b, fmi2Status c, fmi2String d
 
 fmi2CallbackFunctions callbacks = { logger, allocateMemory, freeMemory, NULL, NULL };
 
-int initFMU(fmi2String instanceName, fmi2String guid, fmi2String fmuResourcesLocation, char *fmuFullFilePath)
+int initFMU(FMU_Instance *fmu, fmi2String instanceName, fmi2String guid, fmi2String fmuResourcesLocation, char *fmuFullFilePath)
 {
 	PRINT("Lade FMU: %s\n", fmuFullFilePath);
-	handle = dlopen(fmuFullFilePath, RTLD_LAZY);
-	if (!handle)
+	fmu->handle = dlopen(fmuFullFilePath, RTLD_LAZY);
+	if (!fmu->handle)
 	{
 		PRINT("dlopen failed!\n");
 		return -1;
@@ -191,11 +205,11 @@ int initFMU(fmi2String instanceName, fmi2String guid, fmi2String fmuResourcesLoc
 	FMI_GET_FUNC_ADDR(fmi2Reset)
 	FMI_GET_FUNC_ADDR(fmi2FreeInstance)
 
-	PRINT("FMI-Version: %s\n", fmi2GetVersion());
+	PRINT("FMI-Version: %s\n", fmu->fmi2GetVersion());
 
 	PRINT("GUID: %s\n", guid);
-	fmuInstance = fmi2Instantiate(instanceName, fmi2CoSimulation, guid, fmuResourcesLocation, &callbacks, fmi2False, fmi2False);
-	if (fmuInstance == NULL)
+	fmu->fmuInstance = fmu->fmi2Instantiate(instanceName, fmi2CoSimulation, guid, fmuResourcesLocation, &callbacks, fmi2False, fmi2False);
+	if (fmu->fmuInstance == NULL)
 	{
 		PRINT("Get fmu instance failed!\n");
 		return -1;
@@ -221,7 +235,7 @@ int sim_pt1(double t[], double x[], double tau, int i)
 	return 0;
 }
 
-int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variables *variables, char *htmlbuf)
+int simulate(FMU_Instance *fmu, char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variables *variables, char *htmlbuf)
 {
 	int i = 0;
 	int j;
@@ -241,31 +255,31 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 
 	PRINT("Simulate FMU.\n");
 
-	if (fmi2SetupExperiment(fmuInstance, fmi2True, tolerance, tStart, fmi2False, tStop) != fmi2OK)
+	if (fmu->fmi2SetupExperiment(fmu->fmuInstance, fmi2True, tolerance, tStart, fmi2False, tStop) != fmi2OK)
 	{
 		PRINT("Experiment setup failed!\n");
 		return -1;
 	}
 
-	if (fmi2SetReal(fmuInstance, variables->paramRefs, variables->noOfParam, variables->parameter) != fmi2OK)
+	if (fmu->fmi2SetReal(fmu->fmuInstance, variables->paramRefs, variables->noOfParam, variables->parameter) != fmi2OK)
 	{
 		PRINT("Set real failed!\n");
 		return -1;
 	}
 
-	if (fmi2EnterInitializationMode(fmuInstance) != fmi2OK)
+	if (fmu->fmi2EnterInitializationMode(fmu->fmuInstance) != fmi2OK)
 	{
 		PRINT("EnterInitializationMode failed!\n");
 		return -1;
 	}
 
-	if (fmi2ExitInitializationMode(fmuInstance) != fmi2OK)
+	if (fmu->fmi2ExitInitializationMode(fmu->fmuInstance) != fmi2OK)
 	{
 		PRINT("ExitInitializationMode failed!\n");
 		return -1;
 	}
 
-	status = fmi2GetReal(fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
+	status = fmu->fmi2GetReal(fmu->fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
 	if (status != fmi2OK)
 	{
 		PRINT("Error getReal!\n");
@@ -278,14 +292,14 @@ int simulate(char *resultFullFilePath, fmi2Real tStop, fmi2Real tOutStep, Variab
 	
 	while (tComm < (tStop-0.00000001) && status == fmi2OK)
 	{
-		status = fmi2DoStep(fmuInstance, tComm, tCommStep, fmi2True);
+		status = fmu->fmi2DoStep(fmu->fmuInstance, tComm, tCommStep, fmi2True);
 		if (status != fmi2OK)
 		{
 			PRINT("Error doStep!\n");
 		}
 		tComm += tCommStep;
 
-		status = fmi2GetReal(fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
+		status = fmu->fmi2GetReal(fmu->fmuInstance, variables->varRefs, variables->noOfVars, variables->var);
 		if (status != fmi2OK)
 		{
 			PRINT("Error getReal!\n");
@@ -340,7 +354,7 @@ int readFile(char *filename, int *dataSize, char **data, char *readMode)
 	file = fopen(filename, readMode);
 	if (file == NULL)
 	{
-		printf("Could not open the file!\n");
+		PRINT("Could not open the file!\n");
 		return -1;
 	}
 	fseek(file, 0, SEEK_END);
@@ -354,55 +368,438 @@ int readFile(char *filename, int *dataSize, char **data, char *readMode)
 	return 0;
 }
 
-int main(int argc, char *argv[])
+void *connectionThread(void *argin)
 {
-	int acceptSocket, serverSocket;
-	struct sockaddr_in addr;
-	struct sockaddr_in client_addr;
-	socklen_t addrlen;
-	char *str_client_ip;
-	int port = 80;
-	bool quitServer = FALSE;
+	ThreadArguments *args = argin;
+	int intVal;
+	char *ptr;
+	char token[256];
 	bool quitConnection;
-	bool persistentConnection = TRUE;
-	char str[128];
+	int numbytes;
 	char recvbuf[1024];
 	unsigned int headerlen;
-	char *sendbuf;
 	char *databuf;
-	int sendbuflen;
-	int databuflen;
-	int numbytes;
-	int i;
 	char loadPath[256];
-	int loadPathLen;
+	int databuflen;
+	char *sendbuf;
+	int sendbuflen;
+	char str[128];
+	char linkModelParam[64];
 	char fmuPath[] = "fmu/";
 	char fmuFileName[64];
 	char fmuFullFilePath[256];
 	char resultFilePath[] = "data/";
 	char resultFileName[64];
 	char resultFullFilePath[256];
-	char linkModelParam[64];
-	fmi2Real tstop = 1.0;
-	fmi2Real tOutStep = 0.1;
-	Variables variables;
-	char token[256];
 	fmi2String instanceName = "WebFMU";
 	fmi2String guid = "{8c4e810f-3df3-4a00-8276-176fa3c9f9e0}";
 	fmi2String fmuResourcesLocation = NULL;
-	char *ptr;
+	fmi2Real tstop = 1.0;
+	fmi2Real tOutStep = 0.1;
+	FMU_Instance fmu;
+	Variables variables;
 
-	ptr = argv[0];
+	PRINT("Thread %d started. ID = %d\n", args->threadIndex, (int)args->threadID[args->threadIndex]);
+	strcpy(loadPath, args->cd);
+	quitConnection = FALSE;
+	while (!quitConnection || args->persistentConnection)
+	{
+		databuf = NULL;
+		PRINT("receiving...\n\n");
+		if ((numbytes = recv(args->serverSocket, recvbuf, 1024, 0)) < 1)
+		{
+			PRINT("receiving failed!\n");
+			quitConnection = TRUE;
+			break;
+		}
+		recvbuf[numbytes] = 0;
+		PRINT("%d bytes received:\n%s\n\n", numbytes, recvbuf);
+		if ((ptr = strstr(recvbuf, "\r\n\r\n")))
+		{
+			ptr += 4;
+			headerlen = ptr - recvbuf;
+			PRINT("Length of header: %d\n\n", headerlen);
+		}
+
+		if (strstr(recvbuf, "GET / HTTP/1.1"))
+		{
+			strcpy(loadPath + strlen(args->cd), "html/index.html");
+			readFile(loadPath, &databuflen, &databuf, "r");
+			sprintf(header, http_protocol, "max-age=3600", databuflen, "text/html");
+		}
+		else if (strstr(recvbuf, "GET /style.css"))
+		{
+			strcpy(loadPath + strlen(args->cd), "html/style.css");
+			readFile(loadPath, &databuflen, &databuf, "r");
+			sprintf(header, http_protocol, "max-age=3600", databuflen, "text/css");
+		}
+		else if (strstr(recvbuf, "GET /favicon"))
+		{
+			strcpy(loadPath + strlen(args->cd), "res/FMU_32x32.png");
+			readFile(loadPath, &databuflen, &databuf, "rb");
+			sprintf(header, http_protocol, "max-age=3600", databuflen, "image/apng");
+		}
+		else if (strstr(recvbuf, "GET /logo"))
+		{
+			strcpy(loadPath + strlen(args->cd), "res/FMU.svg");
+			readFile(loadPath, &databuflen, &databuf, "r");
+			sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
+		}
+		else if (strstr(recvbuf, "GET /modelparameter"))
+		{
+			sprintf(str, "fmu/%s.xml", linkModelParam);
+			strcpy(loadPath + strlen(args->cd), str);
+			readFile(loadPath, &databuflen, &databuf, "r");
+			sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
+		}
+		else if (strstr(recvbuf, "GET /options?"))
+		{
+			ptr = recvbuf;
+			getNextDelimiter(&ptr, "?");
+			findNextToken(&ptr, token);
+
+			databuf = malloc(1024);
+			if (token[0] == 'c')
+			{
+				args->persistentConnection = FALSE;
+				PRINT("set connection type = closed\n\n");
+				strcpy(databuf, "<p>set connection type = closed</p>");
+			}
+			else if (token[0] == 'p')
+			{
+				args->persistentConnection = TRUE;
+				PRINT("set connection type = persistent\n\n");
+				strcpy(databuf, "<p>set connection type = persistent</p>");
+			}
+			else if (token[0] == 'q')
+			{
+				PRINT("Server quitted!\n");
+				quitConnection = TRUE;
+				*args->quitServer = TRUE;
+				break;
+			}
+			else if (token[0] == 'h')
+			{
+				strcpy(databuf, "<p>Options:</p>");
+				strcat(databuf, "<p>-h print this help</p>");
+				strcat(databuf, "<p>-c set connection type = closed</p>");
+				strcat(databuf, "<p>-p set connection type = persistent</p>");
+				strcat(databuf, "<p>-q quit server</p>");
+			}
+			else
+			{
+				PRINT("Unknown command!\n");
+				strcpy(databuf, "<p>Unknown command!</p>");
+			}
+			databuflen = strlen(databuf);
+			sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+		}
+		else if (strstr(recvbuf, "GET /modelmenu"))
+		{
+			DIR *dp;
+			struct dirent *ep;
+			char fmuName[128];
+			char token[128];
+
+			databuf = malloc(1024);
+			strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
+
+			strcpy(loadPath + strlen(args->cd), "fmu");
+			dp = opendir(loadPath);
+			if (dp != NULL)
+			{
+				while ((ep = readdir(dp)))
+				{
+					ptr = ep->d_name;
+					if (findNextToken(&ptr, fmuName)) continue;
+					if (findNextToken(&ptr, token)) continue;
+					if (!strcmp(token, "xml")) sprintf(databuf + strlen(databuf), "<option>%s</option>", fmuName);
+				}
+				(void)closedir(dp);
+			}
+			else
+				PRINT("Couldn't open the directory!\n");
+
+			strcpy(databuf + strlen(databuf), "</select>");
+			databuflen = strlen(databuf);
+			sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+		}
+		else if (strstr(recvbuf, "GET /results"))
+		{
+			DIR *dp;
+			struct dirent *ep;
+			struct stat fileStat;
+			char fmuName[128];
+			char token[128];
+
+			databuf = malloc(2048);
+			strcpy(databuf, "<html><table>");
+
+			strcpy(loadPath + strlen(args->cd), "data");
+			dp = opendir(loadPath);
+			if (dp != NULL)
+			{
+				while ((ep = readdir(dp)))
+				{
+					ptr = ep->d_name;
+					if (findNextToken(&ptr, fmuName)) continue;
+					if (findNextToken(&ptr, token)) continue;
+
+					if (!strcmp(token, "mat"))
+					{
+						sprintf(fmuName, "%s.%s", fmuName, token);
+						sprintf(str, "data/%s", fmuName);
+						strcpy(loadPath + strlen(args->cd), str);
+						stat(loadPath, &fileStat);
+						sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s' download='%s'>%s</a></td><td>%u</td><td>%s</td></tr>", fmuName, fmuName, fmuName, (unsigned int)fileStat.st_size, ctime(&fileStat.st_mtime));
+					}
+				}
+				(void)closedir(dp);
+			}
+			else
+				PRINT("Couldn't open the directory!\n");
+
+			strcpy(databuf + strlen(databuf), "</table></html>");
+			databuflen = strlen(databuf);
+			sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+		}
+		else if (strstr(recvbuf, "GET /load?"))
+		{
+			ptr = recvbuf;
+			*str = 0;
+			getNextDelimiter(&ptr, "?");
+			findNextToken(&ptr, token);
+			if (*ptr != '.')
+			{
+				sprintf(str, "%s/", token);
+				findNextToken(&ptr, token);
+			}
+			sprintf(str + strlen(str), "%s.", token);
+			findNextToken(&ptr, token);
+			sprintf(str + strlen(str), "%s", token);
+			if (getNextDelimiter(&ptr, "&/") == '&')
+			{
+				findNextToken(&ptr, linkModelParam);
+			}
+			strcpy(loadPath + strlen(args->cd), str);
+			if (strstr(str, "xml"))
+			{
+				readFile(loadPath, &databuflen, &databuf, "r");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
+			}
+			else if (strstr(str, "txt"))
+			{
+				readFile(loadPath, &databuflen, &databuf, "r");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/plain");
+			}
+			else if (strstr(str, "svg"))
+			{
+				readFile(loadPath, &databuflen, &databuf, "r");
+				sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
+			}
+			else if (strstr(str, "bin") || strstr(str, "mat"))
+			{
+				readFile(loadPath, &databuflen, &databuf, "rb");
+				sprintf(header, http_protocol, "no-store", databuflen, "application/octet-stream");
+			}
+			else
+			{
+				readFile(loadPath, &databuflen, &databuf, "r");
+				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+			}
+		}
+		else if (strstr(recvbuf, "POST /sim"))
+		{
+			ptr = strstr(recvbuf, "Content-Length");
+			if (!findNextTokenLimited(&ptr, token, ':'))
+			{
+				PRINT("%s: ", token);
+				ptr++;
+				sscanf(ptr, "%d", &intVal);
+				PRINT("%d\n\n", intVal);
+				if (numbytes < (headerlen + intVal))
+				{
+					if ((numbytes = recv(args->serverSocket, recvbuf, 1024, 0)) < 1)
+					{
+						PRINT("receiving failed!\n");
+						quitConnection = TRUE;
+						break;
+					}
+					recvbuf[numbytes] = 0;
+					PRINT("!!!!!!!!!!!!! %d bytes of content received:\n%s\n\n", numbytes, recvbuf);
+				}
+			}
+
+			ptr = strstr(recvbuf, "projname");
+			if (ptr)
+			{
+				variables.noOfParam = 0;
+				variables.noOfVars = 0;
+				while (!findNextToken(&ptr, token))
+				{
+					if (!strcmp(token, "fmuname"))
+					{
+						findNextToken(&ptr, token);
+						sprintf(fmuFileName, "%s%s", token, ".so");
+					}
+					else if (!strcmp(token, "projname"))
+					{
+						findNextToken(&ptr, token);
+						sprintf(resultFileName, "%s%s", token, ".mat");
+					}
+					else if (!strcmp(token, "tstop"))
+					{
+						getNextDelimiter(&ptr, "=");
+						sscanf(ptr, "%lf", &tstop);
+					}
+					else if (!strcmp(token, "tOutStep"))
+					{
+						getNextDelimiter(&ptr, "=");
+						sscanf(ptr, "%lf", &tOutStep);
+					}
+					else if (!strcmp(token, "pname"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &intVal);
+						findNextToken(&ptr, token);
+						variables.paramNames[intVal] = malloc(strlen(token));
+						strcpy((char*)variables.paramNames[intVal], token);
+						variables.noOfParam++;
+					}
+					else if (!strcmp(token, "pref"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &intVal);
+						getNextDelimiter(&ptr, "=");
+						sscanf(ptr, "%d", &variables.paramRefs[intVal]);
+					}
+					else if (!strcmp(token, "pval"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &intVal);
+						getNextDelimiter(&ptr, "=");
+						sscanf(ptr, "%lf", &variables.parameter[intVal]);
+					}
+					else if (!strcmp(token, "vname"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &intVal);
+						findNextTokenLimited(&ptr, token, '&');
+						variables.varNames[intVal] = malloc(strlen(token));
+						strcpy((char*)variables.varNames[intVal], token);
+						variables.noOfVars++;
+					}
+					else if (!strcmp(token, "vref"))
+					{
+						ptr++;
+						sscanf(ptr, "%d", &intVal);
+						getNextDelimiter(&ptr, "=");
+						sscanf(ptr, "%d", &variables.varRefs[intVal]);
+					}
+				}
+				sprintf(fmuFullFilePath, "%s%s%s", args->cd, fmuPath, fmuFileName);
+				sprintf(resultFullFilePath, "%s%s%s", args->cd, resultFilePath, resultFileName);
+				databuf = malloc(5000);
+				if (!initFMU(&fmu, instanceName, guid, fmuResourcesLocation, fmuFullFilePath))
+				{
+					if (!simulate(&fmu, resultFullFilePath, tstop, tOutStep, &variables, databuf))
+					{
+						sprintf(databuf + strlen(databuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
+							"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
+					}
+					else
+					{
+						strcat(databuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
+					}
+					//fmi2Terminate(fmuInstance);
+					//fmi2Reset(fmuInstance);
+					fmu.fmi2FreeInstance(fmu.fmuInstance);
+					dlclose(fmu.handle);
+				}
+				else
+				{
+					sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
+				}
+				databuflen = strlen(databuf);
+				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+			}
+			else
+			{
+				databuf = malloc(128);
+				strcpy(databuf, "<p style='font-size:100px;text-align:center'>Incorrect Post Data!</p>");
+				databuflen = strlen(databuf);
+				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+			}
+		}
+		else
+		{
+			PRINT("No Content!\n");
+			databuf = malloc(128);
+			strcpy(databuf, "<p style='font-size:100px;text-align:center'>What!</p>");
+			databuflen = strlen(databuf);
+			sprintf(header, http_protocol, "no-store", databuflen, "text/html");
+		}
+		if (!databuf) break;
+		sendbuflen = strlen(header) + databuflen;
+		sendbuf = malloc(sendbuflen);
+		strcpy(sendbuf, header);
+		memcpy(sendbuf + strlen(header), databuf, databuflen);
+		if ((numbytes = send(args->serverSocket, sendbuf, sendbuflen, 0)) < 1)
+		{
+			PRINT("Senden failed!\n");
+			quitConnection = TRUE;
+			free(sendbuf);
+			free(databuf);
+			break;
+		}
+		PRINT("%d Bytes sent.\n", numbytes);
+		PRINT("Header:\n%s\n\n", header);
+
+		free(sendbuf);
+		free(databuf);
+		if (!args->persistentConnection) quitConnection = TRUE;
+	}
+	close(args->serverSocket);
+	PRINT("Thread %d closed. ID = %d\n", args->threadIndex, (int)args->threadID[args->threadIndex]);
+	args->threadID[args->threadIndex] = -1;
+
+	return NULL;
+}
+
+int main(int argc, char *argv[])
+{
+	int acceptSocket, serverSocket;
+	bool persistentConnection = TRUE;
+	struct sockaddr_in addr;
+	struct sockaddr_in client_addr;
+	socklen_t addrlen;
+	char *str_client_ip;
+	int port = 80;
+	bool quitServer = FALSE;
+	int i;
+	char *cd;
+	char *ptr;
+	char loadPath[256];
+	ThreadArguments args[MAX_THREAD_COUNT];
+	pthread_t threadID[MAX_THREAD_COUNT];
+	unsigned int threadIndex=0;
+	int status=1;
+
+	cd = argv[0];
+	ptr = cd;
 	char *tmp = ptr;
 	while (getNextDelimiter(&ptr, "/")) { tmp = ptr; }
 	*tmp = 0;
-	strcpy(loadPath, argv[0]);
-	loadPathLen = strlen(loadPath);
-	strcpy(loadPath + loadPathLen, "log.txt");
+	strcpy(loadPath, cd);
+	strcpy(loadPath + strlen(cd), "log.txt");
 	strcpy(logfilepath, loadPath);
 	logfile = fopen(logfilepath, "w");
 	fclose(logfile);
-	//printf("%s\n\n", loadPath);
+	PRINT("%s\n\n", loadPath);
+	memset(threadID, -1, MAX_THREAD_COUNT*sizeof(int));
+	//threadID[0] = -1;
+	for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++) PRINT("%d   ", (int)threadID[threadIndex]);
+	PRINT("\n");
 
 	PRINT("Web FMU Server\n\n");
 
@@ -443,7 +840,7 @@ int main(int argc, char *argv[])
 	acceptSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (acceptSocket<0)
 	{
-		printf("Failed to acceptSocket!\n");
+		PRINT("Failed to acceptSocket!\n");
 		return 1;
 	}
 	addr.sin_family = AF_INET;
@@ -451,7 +848,7 @@ int main(int argc, char *argv[])
 	addr.sin_addr.s_addr = INADDR_ANY;
 	if (bind(acceptSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0)
 	{
-		printf("Bind failed!\n");
+		PRINT("Bind failed!\n");
 		close(acceptSocket);
 		return 1;
 	}
@@ -459,7 +856,7 @@ int main(int argc, char *argv[])
 
 	if (listen(acceptSocket, 10)<0)
 	{
-		printf("Listen failed!\n");
+		PRINT("Listen failed!\n");
 		close(acceptSocket);
 		return 1;
 	}
@@ -472,7 +869,7 @@ int main(int argc, char *argv[])
 		serverSocket = accept(acceptSocket, (struct sockaddr*)&client_addr, &addrlen);
 		if (serverSocket<0)
 		{
-			printf("Connection failed!\n");
+			PRINT("Connection failed!\n");
 			close(acceptSocket);
 			return 1;
 		}
@@ -480,365 +877,34 @@ int main(int argc, char *argv[])
 		PRINT("Connection accepted.\n");
 		PRINT("Connected with %s.\n\n", str_client_ip);
 
-		quitConnection = FALSE;
-		while (!quitConnection || persistentConnection)
+		for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++)
 		{
-			databuf = NULL;
-			PRINT("receiving...\n\n");
-			if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
+			if (threadID[threadIndex] == -1)
 			{
-				PRINT("receiving failed!\n");
-				quitConnection = TRUE;
+				args[threadIndex].threadID = threadID;
+				args[threadIndex].threadIndex = threadIndex;
+				args[threadIndex].cd = cd;
+				args[threadIndex].persistentConnection = persistentConnection;
+				args[threadIndex].quitServer = &quitServer;
+				args[threadIndex].serverSocket = serverSocket;
+
+				status=pthread_create(&threadID[threadIndex], NULL, connectionThread, &args[threadIndex]);
+				if (status != 0)
+				{
+					PRINT("Thread creation failed!\n");
+					threadID[threadIndex] = -1;
+				}
 				break;
 			}
-			recvbuf[numbytes] = 0;
-			PRINT("%d bytes received:\n%s\n\n", numbytes, recvbuf);
-			if (ptr = strstr(recvbuf, "\r\n\r\n"))
-			{
-				ptr += 4;
-				headerlen = ptr - recvbuf;
-				PRINT("Length of header: %d\n\n", headerlen);
-			}
-
-			if (strstr(recvbuf, "GET / HTTP/1.1"))
-			{
-				strcpy(loadPath + loadPathLen, "html/index.html");
-				readFile(loadPath, &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, "max-age=3600", databuflen, "text/html");
-			}
-			else if (strstr(recvbuf, "GET /style.css"))
-			{
-				strcpy(loadPath + loadPathLen, "html/style.css");
-				readFile(loadPath, &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, "max-age=3600", databuflen, "text/css");
-			}
-			else if (strstr(recvbuf, "GET /favicon"))
-			{
-				strcpy(loadPath + loadPathLen, "res/FMU_32x32.png");
-				readFile(loadPath, &databuflen, &databuf, "rb");
-				sprintf(header, http_protocol, "max-age=3600", databuflen, "image/apng");
-			}
-			else if (strstr(recvbuf, "GET /logo"))
-			{
-				strcpy(loadPath + loadPathLen, "res/FMU.svg");
-				readFile(loadPath, &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
-			}
-			else if (strstr(recvbuf, "GET /modelparameter"))
-			{
-				sprintf(str, "fmu/%s.xml", linkModelParam);
-				strcpy(loadPath + loadPathLen, str);
-				readFile(loadPath, &databuflen, &databuf, "r");
-				sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
-			}
-			else if (strstr(recvbuf, "GET /options?"))
-			{
-				ptr = recvbuf;
-				getNextDelimiter(&ptr, "?");
-				findNextToken(&ptr, token);
-
-				databuf = malloc(1024);
-				if (token[0] == 'c')
-				{
-					persistentConnection = FALSE;
-					printf("set connection type = closed\n\n");
-					strcpy(databuf, "<p>set connection type = closed</p>");
-				}
-				else if (token[0] == 'p')
-				{
-					persistentConnection = TRUE;
-					printf("set connection type = persistent\n\n");
-					strcpy(databuf, "<p>set connection type = persistent</p>");
-				}
-				else if (token[0] == 'q')
-				{
-					printf("Server quitted!\n");
-					quitConnection = TRUE;
-					quitServer = TRUE;
-					break;
-				}
-				else if (token[0] == 'h')
-				{
-					strcpy(databuf, "<p>Options:</p>");
-					strcat(databuf, "<p>-h print this help</p>");
-					strcat(databuf, "<p>-c set connection type = closed</p>");
-					strcat(databuf, "<p>-p set connection type = persistent</p>");
-					strcat(databuf, "<p>-q quit server</p>");
-				}
-				else
-				{
-					printf("Unknown command!\n");
-					strcpy(databuf, "<p>Unknown command!</p>");
-				}
-				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-			}
-			else if (strstr(recvbuf, "GET /modelmenu"))
-			{
-				DIR *dp;
-				struct dirent *ep;
-				char fmuName[128];
-				char token[128];
-
-				databuf = malloc(1024);
-				strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
-
-				strcpy(loadPath + loadPathLen, "fmu");
-				dp = opendir(loadPath);
-				if (dp != NULL)
-				{
-					while (ep = readdir(dp))
-					{
-						ptr = ep->d_name;
-						if (findNextToken(&ptr, fmuName)) continue;
-						if (findNextToken(&ptr, token)) continue;
-						if (!strcmp(token, "xml")) sprintf(databuf + strlen(databuf), "<option>%s</option>", fmuName);
-					}
-					(void)closedir(dp);
-				}
-				else
-					printf("Couldn't open the directory!\n");
-
-				strcpy(databuf + strlen(databuf), "</select>");
-				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-			}
-			else if (strstr(recvbuf, "GET /results"))
-			{
-				DIR *dp;
-				struct dirent *ep;
-				struct stat fileStat;
-				char fmuName[128];
-				char token[128];
-
-				databuf = malloc(2048);
-				strcpy(databuf, "<html><table>");
-
-				strcpy(loadPath + loadPathLen, "data");
-				dp = opendir(loadPath);
-				if (dp != NULL)
-				{
-					while (ep = readdir(dp))
-					{
-						ptr = ep->d_name;
-						if (findNextToken(&ptr, fmuName)) continue;
-						if (findNextToken(&ptr, token)) continue;
-	
-						if (!strcmp(token, "mat"))
-						{
-							sprintf(fmuName, "%s.%s", fmuName, token);
-							sprintf(str, "data/%s", fmuName);
-							strcpy(loadPath + loadPathLen, str);
-							stat(loadPath, &fileStat);
-							sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s' download='%s'>%s</a></td><td>%d</td><td>%s</td></tr>", fmuName, fmuName, fmuName, fileStat.st_size,ctime(&fileStat.st_mtime));
-						}
-					}
-					(void)closedir(dp);
-				}
-				else
-					printf("Couldn't open the directory!\n");
-
-				strcpy(databuf + strlen(databuf), "</table></html>");
-				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-			}
-			else if (strstr(recvbuf, "GET /load?"))
-			{
-				ptr = recvbuf;
-				*str = 0;
-				getNextDelimiter(&ptr, "?");
-				findNextToken(&ptr, token);
-				if (*ptr != '.')
-				{
-					sprintf(str, "%s/", token);
-					findNextToken(&ptr, token);
-				}
-				sprintf(str + strlen(str), "%s.", token);
-				findNextToken(&ptr, token);
-				sprintf(str + strlen(str), "%s", token);
-				if (getNextDelimiter(&ptr, "&/") == '&')
-				{
-					findNextToken(&ptr, linkModelParam);
-				}
-				strcpy(loadPath + loadPathLen, str);
-				if (strstr(str, "xml"))
-				{
-					readFile(loadPath, &databuflen, &databuf, "r");
-					sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
-				}
-				else if (strstr(str, "txt"))
-				{
-					readFile(loadPath, &databuflen, &databuf, "r");
-					sprintf(header, http_protocol, "no-store", databuflen, "text/plain");
-				}
-				else if (strstr(str, "svg"))
-				{
-					readFile(loadPath, &databuflen, &databuf, "r");
-					sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
-				}
-				else if (strstr(str, "bin") || strstr(str, "mat"))
-				{
-					readFile(loadPath, &databuflen, &databuf, "rb");
-					sprintf(header, http_protocol, "no-store", databuflen, "application/octet-stream");
-				}
-				else
-				{
-					readFile(loadPath, &databuflen, &databuf, "r");
-					sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-				}
-			}
-			else if (strstr(recvbuf, "POST /sim"))
-			{
-				ptr = strstr(recvbuf, "Content-Length");
-				if (!findNextTokenLimited(&ptr, token, ':'))
-				{
-					PRINT("%s: ", token);
-					ptr++;
-					sscanf(ptr, "%d", &i);
-					PRINT("%d\n\n", i);
-					if (numbytes < (headerlen + i))
-					{
-						if ((numbytes = recv(serverSocket, recvbuf, 1024, 0)) < 1)
-						{
-							PRINT("receiving failed!\n");
-							quitConnection = TRUE;
-							break;
-						}
-						recvbuf[numbytes] = 0;
-						PRINT("!!!!!!!!!!!!! %d bytes of content received:\n%s\n\n", numbytes, recvbuf);
-					}
-				}
-
-				ptr = strstr(recvbuf, "projname");
-				if (ptr)
-				{
-					variables.noOfParam = 0;
-					variables.noOfVars = 0;
-					while (!findNextToken(&ptr, token))
-					{
-						if (!strcmp(token, "fmuname"))
-						{
-							findNextToken(&ptr, token);
-							sprintf(fmuFileName, "%s%s", token, ".so");
-						}
-						else if (!strcmp(token, "projname"))
-						{
-							findNextToken(&ptr, token);
-							sprintf(resultFileName, "%s%s", token, ".mat");
-						}
-						else if (!strcmp(token, "tstop"))
-						{
-							getNextDelimiter(&ptr, "=");
-							sscanf(ptr, "%lf", &tstop);
-						}
-						else if (!strcmp(token, "tOutStep"))
-						{
-							getNextDelimiter(&ptr, "=");
-							sscanf(ptr, "%lf", &tOutStep);
-						}
-						else if (!strcmp(token, "pname"))
-						{
-							ptr++;
-							sscanf(ptr, "%d", &i);
-							findNextToken(&ptr, token);
-							variables.paramNames[i] = malloc(strlen(token));
-							strcpy((char*)variables.paramNames[i], token);
-							variables.noOfParam++;
-						}
-						else if (!strcmp(token, "pref"))
-						{
-							ptr++;
-							sscanf(ptr, "%d", &i);
-							getNextDelimiter(&ptr, "=");
-							sscanf(ptr, "%d", &variables.paramRefs[i]);
-						}
-						else if (!strcmp(token, "pval"))
-						{
-							ptr++;
-							sscanf(ptr, "%d", &i);
-							getNextDelimiter(&ptr, "=");
-							sscanf(ptr, "%lf", &variables.parameter[i]);
-						}
-						else if (!strcmp(token, "vname"))
-						{
-							ptr++;
-							sscanf(ptr, "%d", &i);
-							findNextTokenLimited(&ptr, token, '&');
-							variables.varNames[i] = malloc(strlen(token));
-							strcpy((char*)variables.varNames[i], token);
-							variables.noOfVars++;
-						}
-						else if (!strcmp(token, "vref"))
-						{
-							ptr++;
-							sscanf(ptr, "%d", &i);
-							getNextDelimiter(&ptr, "=");
-							sscanf(ptr, "%d", &variables.varRefs[i]);
-						}
-					}
-					sprintf(fmuFullFilePath, "%s%s%s", argv[0], fmuPath, fmuFileName);
-					sprintf(resultFullFilePath, "%s%s%s", argv[0], resultFilePath, resultFileName);
-					databuf = malloc(5000);
-					if (!initFMU(instanceName, guid, fmuResourcesLocation, fmuFullFilePath))
-					{
-						if (!simulate(resultFullFilePath, tstop, tOutStep, &variables, databuf))
-						{
-							sprintf(databuf + strlen(databuf), "<p>FMU %s instanciated.</p><p>Result File %s created.</p>"
-								"<p>Simulation succesfully terminated.</p><div id='plot'></div>", fmuFileName, resultFileName);
-						}
-						else
-						{
-							strcat(databuf, "<p>Simulation Error!</p><p>Simulation failed!</p>");
-						}
-						//fmi2Terminate(fmuInstance);
-						//fmi2Reset(fmuInstance);
-						fmi2FreeInstance(fmuInstance);
-						dlclose(handle);
-					}
-					else
-					{
-						sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
-					}
-					databuflen = strlen(databuf);
-					sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-				}
-				else
-				{
-					databuf = malloc(128);
-					strcpy(databuf, "<p style='font-size:100px;text-align:center'>Incorrect Post Data!</p>");
-					databuflen = strlen(databuf);
-					sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-				}
-			}
-			else
-			{
-				printf("No Content!\n");
-				databuf = malloc(128);
-				strcpy(databuf, "<p style='font-size:100px;text-align:center'>What!</p>");
-				databuflen = strlen(databuf);
-				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-			}
-			if (!databuf) break;
-			sendbuflen = strlen(header) + databuflen;
-			sendbuf = malloc(sendbuflen);
-			strcpy(sendbuf, header);
-			memcpy(sendbuf + strlen(header), databuf, databuflen);
-			if ((numbytes = send(serverSocket, sendbuf, sendbuflen, 0)) < 1)
-			{
-				printf("Senden failed!\n");
-				quitConnection = TRUE;
-				free(sendbuf);
-				free(databuf);
-				break;
-			}
-			PRINT("%d Bytes sent.\n", numbytes);
-			PRINT("Header:\n%s\n\n", header);
-
-			free(sendbuf);
-			free(databuf);
-			if (!persistentConnection) quitConnection = TRUE;
 		}
-		close(serverSocket);
+		if (status != 0)
+		{
+			PRINT("No Threads availlable!\n");
+			close(serverSocket);
+		}
+		for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++) PRINT("%d   ", (int)threadID[threadIndex]);
+		PRINT("\n");
+		status = 1;
 	}
 
 	close(acceptSocket);

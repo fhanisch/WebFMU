@@ -5,7 +5,7 @@ mat: matIO/matio.c
 	ar cr libmatio.a matio.o
 
 webfmuserver: src/main.c libmatio.a
-	gcc -std=c11 -o webfmuserver src/main.c -L . -ldl -lmatio
+	gcc -std=c11 -Wall -o webfmuserver src/main.c -L . -ldl -lmatio -pthread
 
 spacestation: src/space_station.c
 	gcc -std=c11 -shared -Wall -o fmu/space_station_fmu.so src/space_station.c -lm
