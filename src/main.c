@@ -1,9 +1,14 @@
 /// @date: 01.12.2017
 /// @author: fh
+/// @url: https://github.com/fhanisch/WebFMU.git
 
 /*
 	compile: gcc -std=c11 -Wall -o webfmuserver src/main.c -L . -ldl -lmatio -pthread
 	Wichtig: Cache-Control im Header beachten !!! --> Wann müssen welche Seiten aktualisiert werden?
+
+	ToDo:
+		- Windows Portierung
+		- Log Handling
 */
 
 #include <stdio.h>
@@ -23,7 +28,7 @@
 #define FALSE 0
 #define TRUE 1
 #define MAX_THREAD_COUNT 10
-//#define LOG
+#define NOLOG
 
 #ifdef LOG
 
@@ -215,6 +220,9 @@ int initFMU(FMU_Instance *fmu, fmi2String instanceName, fmi2String guid, fmi2Str
 		return -1;
 	}
 	PRINT("FMU instanciated.\n");
+	PRINT("Handle ---> %p\n", (void*)fmu->handle);
+	PRINT("FMU Instance ---> %p\n", (void*)fmu->fmuInstance);
+	PRINT("FMU SetReal ---> %p\n", (void*)fmu->fmi2SetReal);
 
 	return 0;
 }
