@@ -13,7 +13,7 @@ webfmuserver_gcc: src/main.c libmatio.a
 	gcc -std=c11 -Wall -o webfmuserver src/main.c -L . -ldl -lmatio -pthread
 
 webfmuserver_msvc: src/main.c matio.lib
-	cl /nologo /W3 src/main.c /link Ws2_32.lib matio.lib /out:webfmuserver.exe
+	cl /nologo /W3 /D WINDOWS src/main.c /link Ws2_32.lib matio.lib /out:webfmuserver.exe
 
 spacestation_gcc: src/space_station.c
 	gcc -std=c11 -shared -Wall -o fmu/space_station_fmu.so src/space_station.c -lm

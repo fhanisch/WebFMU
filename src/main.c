@@ -9,21 +9,51 @@
 	ToDo:
 		- Windows Portierung
 		- Log Handling
+        - _WINSOCK_DEPRECATED_NO_WARNINGS entfernen
 */
+
+#define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+//#define WINDOWS  // --> wird über Compiler Optionen definiert
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <dlfcn.h>
-#include <dirent.h>
-#include <sys/stat.h>
-#include <pthread.h>
 #include "fmi2FunctionTypes.h"
 #include "../matIO/matio.h"
+
+#ifndef WINDOWS
+    #include <sys/socket.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <dlfcn.h>
+    #include <dirent.h>
+    #include <sys/stat.h>
+    #include <pthread.h>
+
+    #define LOADLIBRARY(libname) dlopen(libname, RTLD_LAZY);
+    #define FREELIBRARY(handle) dlclose(handle);
+    #define GETFCNPTR dlsym
+    #define CLOSESOCKET(sock) close(sock);
+
+    typedef void* HANDLE;
+#else
+    #include <stdint.h>
+    #include <windows.h>
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+
+    #define LOADLIBRARY(libname) LoadLibrary(libname);
+    #define FREELIBRARY(handle) FreeLibrary(handle);
+    #define GETFCNPTR GetProcAddress
+    #define CLOSESOCKET(sock) closesocket(sock);
+
+    typedef DWORD pthread_t;
+#endif // !WINDOWS
 
 #define FALSE 0
 #define TRUE 1
@@ -48,18 +78,18 @@
 
 #endif
 
-#define FMI_GET_FUNC_ADDR( fun )                                    \
-                fmu->fun = (fun##TYPE*)dlsym(fmu->handle, #fun);    \
-                if (fmu->fun == NULL)                               \
-                {                                                   \
-                    PRINT("Load %s failed!\n",#fun);                \
-                    return -1;                                      \
+#define FMI_GET_FUNC_ADDR( fun )                                        \
+                fmu->fun = (fun##TYPE*)GETFCNPTR(fmu->handle, #fun);    \
+                if (fmu->fun == NULL)                                   \
+                {                                                       \
+                    PRINT("Load %s failed!\n",#fun);                    \
+                    return -1;                                          \
                 }
 
 typedef int bool;
 
 typedef struct {
-	void *handle;
+	HANDLE handle;
 	fmi2GetVersionTYPE *fmi2GetVersion;
 	fmi2InstantiateTYPE *fmi2Instantiate;
 	fmi2SetupExperimentTYPE *fmi2SetupExperiment;
@@ -191,10 +221,10 @@ fmi2CallbackFunctions callbacks = { logger, allocateMemory, freeMemory, NULL, NU
 int initFMU(FMU_Instance *fmu, fmi2String instanceName, fmi2String guid, fmi2String fmuResourcesLocation, char *fmuFullFilePath)
 {
 	PRINT("Lade FMU: %s\n", fmuFullFilePath);
-	fmu->handle = dlopen(fmuFullFilePath, RTLD_LAZY);
+	fmu->handle = LOADLIBRARY(fmuFullFilePath);
 	if (!fmu->handle)
 	{
-		PRINT("dlopen failed!\n");
+		PRINT("Load Library failed!\n");
 		return -1;
 	}
 
@@ -425,7 +455,7 @@ void *connectionThread(void *argin)
 		if ((ptr = strstr(recvbuf, "\r\n\r\n")))
 		{
 			ptr += 4;
-			headerlen = ptr - recvbuf;
+			headerlen = (unsigned int)(ptr - recvbuf);
 			PRINT("Length of header: %d\n\n", headerlen);
 		}
 
@@ -499,11 +529,12 @@ void *connectionThread(void *argin)
 				PRINT("Unknown command!\n");
 				strcpy(databuf, "<p>Unknown command!</p>");
 			}
-			databuflen = strlen(databuf);
+			databuflen = (int)strlen(databuf);
 			sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 		}
 		else if (strstr(recvbuf, "GET /modelmenu"))
 		{
+#ifndef WINDOWS
 			DIR *dp;
 			struct dirent *ep;
 			char fmuName[128];
@@ -527,13 +558,14 @@ void *connectionThread(void *argin)
 			}
 			else
 				PRINT("Couldn't open the directory!\n");
-
+#endif
 			strcpy(databuf + strlen(databuf), "</select>");
-			databuflen = strlen(databuf);
+			databuflen = (int)strlen(databuf);
 			sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 		}
 		else if (strstr(recvbuf, "GET /results"))
 		{
+#ifndef WINDOWS
 			DIR *dp;
 			struct dirent *ep;
 			struct stat fileStat;
@@ -566,9 +598,9 @@ void *connectionThread(void *argin)
 			}
 			else
 				PRINT("Couldn't open the directory!\n");
-
+#endif
 			strcpy(databuf + strlen(databuf), "</table></html>");
-			databuflen = strlen(databuf);
+			databuflen = (int)strlen(databuf);
 			sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 		}
 		else if (strstr(recvbuf, "GET /load?"))
@@ -625,7 +657,7 @@ void *connectionThread(void *argin)
 				ptr++;
 				sscanf(ptr, "%d", &intVal);
 				PRINT("%d\n\n", intVal);
-				if (numbytes < (headerlen + intVal))
+				if (numbytes < ((int)headerlen + intVal))
 				{
 					if ((numbytes = recv(args->serverSocket, recvbuf, 1024, 0)) < 1)
 					{
@@ -722,20 +754,20 @@ void *connectionThread(void *argin)
 					//fmi2Terminate(fmuInstance);
 					//fmi2Reset(fmuInstance);
 					fmu.fmi2FreeInstance(fmu.fmuInstance);
-					dlclose(fmu.handle);
+                    FREELIBRARY(fmu.handle)
 				}
 				else
 				{
 					sprintf(databuf, "<p>FMU %s could not be instanciated!</p><p>Simulation failed!</p>", fmuFileName);
 				}
-				databuflen = strlen(databuf);
+				databuflen = (int)strlen(databuf);
 				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
 			else
 			{
 				databuf = malloc(128);
 				strcpy(databuf, "<p style='font-size:100px;text-align:center'>Incorrect Post Data!</p>");
-				databuflen = strlen(databuf);
+				databuflen = (int)strlen(databuf);
 				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 			}
 		}
@@ -744,11 +776,11 @@ void *connectionThread(void *argin)
 			PRINT("No Content!\n");
 			databuf = malloc(128);
 			strcpy(databuf, "<p style='font-size:100px;text-align:center'>What!</p>");
-			databuflen = strlen(databuf);
+			databuflen = (int)strlen(databuf);
 			sprintf(header, http_protocol, "no-store", databuflen, "text/html");
 		}
 		if (!databuf) break;
-		sendbuflen = strlen(header) + databuflen;
+		sendbuflen = (int)strlen(header) + databuflen;
 		sendbuf = malloc(sendbuflen);
 		strcpy(sendbuf, header);
 		memcpy(sendbuf + strlen(header), databuf, databuflen);
@@ -767,7 +799,7 @@ void *connectionThread(void *argin)
 		free(databuf);
 		if (!args->persistentConnection) quitConnection = TRUE;
 	}
-	close(args->serverSocket);
+    CLOSESOCKET(args->serverSocket)
 	PRINT("Thread %d closed. ID = %d\n", args->threadIndex, (int)args->threadID[args->threadIndex]);
 	args->threadID[args->threadIndex] = -1;
 
@@ -791,7 +823,7 @@ int main(int argc, char *argv[])
 	ThreadArguments args[MAX_THREAD_COUNT];
 	pthread_t threadID[MAX_THREAD_COUNT];
 	unsigned int threadIndex=0;
-	int status=1;
+    int status = 1;
 
 	cd = argv[0];
 	ptr = cd;
@@ -845,7 +877,18 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	acceptSocket = socket(AF_INET, SOCK_STREAM, 0);
+#ifdef WINDOWS
+    WSADATA wsaData;
+
+    // Initialize Winsock
+    int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != 0) {
+        PRINT("WSAStartup failed: %d\n", iResult);
+        return 1;
+    }
+#endif
+
+	acceptSocket = (int)socket(AF_INET, SOCK_STREAM, 0);
 	if (acceptSocket<0)
 	{
 		PRINT("Failed to acceptSocket!\n");
@@ -857,15 +900,15 @@ int main(int argc, char *argv[])
 	if (bind(acceptSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0)
 	{
 		PRINT("Bind failed!\n");
-		close(acceptSocket);
+        CLOSESOCKET(acceptSocket)
 		return 1;
 	}
 	PRINT("Bind Socket with Port: %d\n", port);
 
-	if (listen(acceptSocket, 10)<0)
+	if (listen(acceptSocket, MAX_THREAD_COUNT)<0)
 	{
 		PRINT("Listen failed!\n");
-		close(acceptSocket);
+        CLOSESOCKET(acceptSocket)
 		return 1;
 	}
 
@@ -874,11 +917,11 @@ int main(int argc, char *argv[])
 	while (!quitServer)
 	{
 		PRINT("Wait for connection...\n\n");
-		serverSocket = accept(acceptSocket, (struct sockaddr*)&client_addr, &addrlen);
+		serverSocket = (int)accept(acceptSocket, (struct sockaddr*)&client_addr, &addrlen);
 		if (serverSocket<0)
 		{
 			PRINT("Connection failed!\n");
-			close(acceptSocket);
+            CLOSESOCKET(acceptSocket)
 			return 1;
 		}
 		str_client_ip = inet_ntoa(client_addr.sin_addr);
@@ -896,26 +939,38 @@ int main(int argc, char *argv[])
 				args[threadIndex].quitServer = &quitServer;
 				args[threadIndex].serverSocket = serverSocket;
 
+#ifndef WINDOWS
 				status=pthread_create(&threadID[threadIndex], NULL, connectionThread, &args[threadIndex]);
 				if (status != 0)
 				{
 					PRINT("Thread creation failed!\n");
 					threadID[threadIndex] = -1;
 				}
+#else
+                HANDLE threadHandle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)connectionThread, &args[threadIndex], 0, &threadID[threadIndex]);
+                if (threadHandle == NULL)
+                {
+                    PRINT("Thread creation failed!\n");
+                    threadID[threadIndex] = -1;
+                    status = 1;
+                }
+                else
+                    status = 0;
+#endif
 				break;
 			}
 		}
 		if (status != 0)
 		{
 			PRINT("No Threads availlable!\n");
-			close(serverSocket);
+            CLOSESOCKET(serverSocket)
 		}
 		for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++) PRINT("%d   ", (int)threadID[threadIndex]);
 		PRINT("\n");
 		status = 1;
 	}
 
-	close(acceptSocket);
+    CLOSESOCKET(acceptSocket)
 
 	return 0;
 }
