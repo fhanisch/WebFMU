@@ -5,3 +5,4 @@ webfmuserver
 *.lib
 *.o
 *.obj
+*.exe
