@@ -2,4 +2,6 @@ data
 webfmuserver
 *.txt
 *.a
+*.lib
 *.o
+*.obj

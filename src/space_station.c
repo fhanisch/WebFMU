@@ -107,7 +107,7 @@ void fmi2FreeInstance(fmi2Component c)
 
 fmi2Status fmi2GetReal(fmi2Component c, const fmi2ValueReference refs[], unsigned int n, fmi2Real vars[])
 { 
-	for ( int i=0; i < n; i++)
+	for (unsigned int i=0; i < n; i++)
 	{
 		if (refs[i] == 0) vars[i] = station_x[0];
 		else if (refs[i] == 1) vars[i] = station_x[1];
