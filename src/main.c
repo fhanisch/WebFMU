@@ -534,14 +534,14 @@ void *connectionThread(void *argin)
 		}
 		else if (strstr(recvbuf, "GET /modelmenu"))
 		{
-#ifndef WINDOWS
-			DIR *dp;
-			struct dirent *ep;
 			char fmuName[128];
 			char token[128];
 
 			databuf = malloc(1024);
 			strcpy(databuf, "<select id = 'modelSelection' onchange = 'changeSelection()' style = 'width: 50%'>");
+#ifndef WINDOWS
+			DIR *dp;
+			struct dirent *ep;
 
 			strcpy(loadPath + strlen(args->cd), "fmu");
 			dp = opendir(loadPath);
@@ -555,6 +555,27 @@ void *connectionThread(void *argin)
 					if (!strcmp(token, "xml")) sprintf(databuf + strlen(databuf), "<option>%s</option>", fmuName);
 				}
 				(void)closedir(dp);
+			}
+			else
+				PRINT("Couldn't open the directory!\n");
+#else
+			HANDLE hFind = INVALID_HANDLE_VALUE;
+			WIN32_FIND_DATA ffd;
+
+			strcpy(loadPath + strlen(args->cd), "fmu/*");
+			hFind = FindFirstFile(loadPath, &ffd);
+			if (hFind != INVALID_HANDLE_VALUE)
+			{
+				do
+				{
+					PRINT("  %s\n", ffd.cFileName);
+					ptr = ffd.cFileName;
+					if (findNextToken(&ptr, fmuName)) continue;
+					if (findNextToken(&ptr, token)) continue;
+					if (!strcmp(token, "xml")) sprintf(databuf + strlen(databuf), "<option>%s</option>", fmuName);
+				} while (FindNextFile(hFind, &ffd) != 0);
+
+				FindClose(hFind);
 			}
 			else
 				PRINT("Couldn't open the directory!\n");
