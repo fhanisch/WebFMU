@@ -3,6 +3,12 @@
 
 #include <math.h>
 
+#ifdef WINDOWS
+	#define EXPORT __declspec(dllexport)
+#else
+	#define EXPORT
+#endif
+
 typedef void*           fmi2Component;
 typedef void*           fmi2ComponentEnvironment;
 typedef void*           fmi2FMUstate;
@@ -50,17 +56,17 @@ double earth_v[3], station_v[3];
 double earth_der_v[3], station_der_v[3];
 double f[3];
 
-char *fmi2GetVersion()
+EXPORT char *fmi2GetVersion()
 {
 	return version;
 }
 
-fmi2Component fmi2Instantiate(fmi2String instanceName, fmi2Type fmi2CoSimulation, fmi2String guid, fmi2String fmuResourcesLocation, const fmi2CallbackFunctions* callbacks, fmi2Boolean visible, fmi2Boolean logginhOn)
+EXPORT fmi2Component fmi2Instantiate(fmi2String instanceName, fmi2Type fmi2CoSimulation, fmi2String guid, fmi2String fmuResourcesLocation, const fmi2CallbackFunctions* callbacks, fmi2Boolean visible, fmi2Boolean logginhOn)
 {
 	return (fmi2Component)1;
 }
 
-fmi2Status fmi2SetupExperiment(fmi2Component c, fmi2Boolean toleranceDefined, fmi2Real tolerance, fmi2Real tStart, fmi2Boolean tStopDefined, fmi2Real tStop)
+EXPORT fmi2Status fmi2SetupExperiment(fmi2Component c, fmi2Boolean toleranceDefined, fmi2Real tolerance, fmi2Real tStart, fmi2Boolean tStopDefined, fmi2Real tStop)
 {
 	//init earth
 	earth_m = 5.976e24;
@@ -83,29 +89,29 @@ fmi2Status fmi2SetupExperiment(fmi2Component c, fmi2Boolean toleranceDefined, fm
 	return fmi2OK;
 }
 
-fmi2Status fmi2EnterInitializationMode(fmi2Component c)
+EXPORT fmi2Status fmi2EnterInitializationMode(fmi2Component c)
 {
 	return fmi2OK;
 }
-fmi2Status fmi2ExitInitializationMode(fmi2Component c)
+EXPORT fmi2Status fmi2ExitInitializationMode(fmi2Component c)
 { 
 	return fmi2OK;
 }
-fmi2Status fmi2Terminate(fmi2Component c)
+EXPORT fmi2Status fmi2Terminate(fmi2Component c)
 { 
 	return fmi2OK;
 }
-fmi2Status fmi2Reset(fmi2Component c)
+EXPORT fmi2Status fmi2Reset(fmi2Component c)
 {
 	return fmi2OK;
 }
 
-void fmi2FreeInstance(fmi2Component c)
+EXPORT void fmi2FreeInstance(fmi2Component c)
 { 
 	
 }
 
-fmi2Status fmi2GetReal(fmi2Component c, const fmi2ValueReference refs[], unsigned int n, fmi2Real vars[])
+EXPORT fmi2Status fmi2GetReal(fmi2Component c, const fmi2ValueReference refs[], unsigned int n, fmi2Real vars[])
 { 
 	for (unsigned int i=0; i < n; i++)
 	{
@@ -117,7 +123,7 @@ fmi2Status fmi2GetReal(fmi2Component c, const fmi2ValueReference refs[], unsigne
 	return fmi2OK;
 }
 
-fmi2Status fmi2SetReal(fmi2Component c, const fmi2ValueReference refs[], unsigned int n, const fmi2Real vars[])
+EXPORT fmi2Status fmi2SetReal(fmi2Component c, const fmi2ValueReference refs[], unsigned int n, const fmi2Real vars[])
 { 
 	return fmi2OK;
 }
@@ -133,7 +139,7 @@ void gravitationalForce(double f[3], double r1[3],double r2[3], double m1, doubl
 	f[2] = G * m1 * m2 * (r2[2]-r1[2]) / pow(r, 3);
 }
 
-fmi2Status fmi2DoStep(fmi2Component c, fmi2Real t, fmi2Real h, fmi2Boolean noSetFMUStatePriorToCurrentPoint)
+EXPORT fmi2Status fmi2DoStep(fmi2Component c, fmi2Real t, fmi2Real h, fmi2Boolean noSetFMUStatePriorToCurrentPoint)
 {
 	gravitationalForce(f, earth_x, station_x, earth_m, station_m);
 

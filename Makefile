@@ -19,7 +19,7 @@ spacestation_gcc: src/space_station.c
 	gcc -std=c11 -shared -Wall -o fmu/space_station_fmu.so src/space_station.c -lm
 
 spacestation_msvc: src/space_station.c
-	cl /nologo /W3 src/space_station.c /link /DLL /out:fmu/space_station_fmu.dll
+	cl /nologo /W3 /D WINDOWS src/space_station.c /link /DLL /out:fmu/space_station_fmu.dll
 
 install_raspi:
 	sudo cp webfmuserver /usr/local/webfmu

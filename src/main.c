@@ -10,7 +10,6 @@
 	im Textmodus ggf. die Zeilenenden angepasst werden
 
 	ToDo:
-		- Windows Portierung
 		- Log Handling
 		- _WINSOCK_DEPRECATED_NO_WARNINGS entfernen
 */
@@ -42,6 +41,7 @@
     #define FREELIBRARY(handle) dlclose(handle);
     #define GETFCNPTR dlsym
     #define CLOSESOCKET(sock) close(sock);
+	#define EXT ".so"
 
     typedef void* HANDLE;
 #else
@@ -54,6 +54,7 @@
     #define FREELIBRARY(handle) FreeLibrary(handle);
     #define GETFCNPTR GetProcAddress
     #define CLOSESOCKET(sock) closesocket(sock);
+	#define EXT ".dll"
 
     typedef DWORD pthread_t;
 #endif // !WINDOWS
@@ -723,7 +724,7 @@ void *connectionThread(void *argin)
 					if (!strcmp(token, "fmuname"))
 					{
 						findNextToken(&ptr, token);
-						sprintf(fmuFileName, "%s%s", token, ".so");
+						sprintf(fmuFileName, "%s%s", token, EXT);
 					}
 					else if (!strcmp(token, "projname"))
 					{
