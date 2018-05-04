@@ -6,10 +6,13 @@
 	compile: gcc -std=c11 -Wall -o webfmuserver src/main.c -L . -ldl -lmatio -pthread
 	Wichtig: Cache-Control im Header beachten !!! --> Wann müssen welche Seiten aktualisiert werden?
 
+	readFile(loadPath, &databuflen, &databuf, "rb"); --> Lesemodus sollte Binärmodus sein, da unter Windows
+	im Textmodus ggf. die Zeilenenden angepasst werden
+
 	ToDo:
 		- Windows Portierung
 		- Log Handling
-        - _WINSOCK_DEPRECATED_NO_WARNINGS entfernen
+		- _WINSOCK_DEPRECATED_NO_WARNINGS entfernen
 */
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -462,13 +465,13 @@ void *connectionThread(void *argin)
 		if (strstr(recvbuf, "GET / HTTP/1.1"))
 		{
 			strcpy(loadPath + strlen(args->cd), "html/index.html");
-			readFile(loadPath, &databuflen, &databuf, "r");
+			readFile(loadPath, &databuflen, &databuf, "rb");
 			sprintf(header, http_protocol, "max-age=3600", databuflen, "text/html");
 		}
 		else if (strstr(recvbuf, "GET /style.css"))
 		{
 			strcpy(loadPath + strlen(args->cd), "html/style.css");
-			readFile(loadPath, &databuflen, &databuf, "r");
+			readFile(loadPath, &databuflen, &databuf, "rb");
 			sprintf(header, http_protocol, "max-age=3600", databuflen, "text/css");
 		}
 		else if (strstr(recvbuf, "GET /favicon"))
@@ -480,14 +483,14 @@ void *connectionThread(void *argin)
 		else if (strstr(recvbuf, "GET /logo"))
 		{
 			strcpy(loadPath + strlen(args->cd), "res/FMU.svg");
-			readFile(loadPath, &databuflen, &databuf, "r");
+			readFile(loadPath, &databuflen, &databuf, "rb");
 			sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
 		}
 		else if (strstr(recvbuf, "GET /modelparameter"))
 		{
 			sprintf(str, "fmu/%s.xml", linkModelParam);
 			strcpy(loadPath + strlen(args->cd), str);
-			readFile(loadPath, &databuflen, &databuf, "r");
+			readFile(loadPath, &databuflen, &databuf, "rb");
 			sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
 		}
 		else if (strstr(recvbuf, "GET /options?"))
@@ -568,7 +571,6 @@ void *connectionThread(void *argin)
 			{
 				do
 				{
-					PRINT("  %s\n", ffd.cFileName);
 					ptr = ffd.cFileName;
 					if (findNextToken(&ptr, fmuName)) continue;
 					if (findNextToken(&ptr, token)) continue;
@@ -586,16 +588,16 @@ void *connectionThread(void *argin)
 		}
 		else if (strstr(recvbuf, "GET /results"))
 		{
-#ifndef WINDOWS
-			DIR *dp;
-			struct dirent *ep;
-			struct stat fileStat;
 			char fmuName[128];
 			char token[128];
 
 			databuf = malloc(2048);
 			strcpy(databuf, "<html><table>");
-
+#ifndef WINDOWS
+			DIR *dp;
+			struct dirent *ep;
+			struct stat fileStat;
+			
 			strcpy(loadPath + strlen(args->cd), "data");
 			dp = opendir(loadPath);
 			if (dp != NULL)
@@ -616,6 +618,40 @@ void *connectionThread(void *argin)
 					}
 				}
 				(void)closedir(dp);
+			}
+			else
+				PRINT("Couldn't open the directory!\n");
+#else
+			HANDLE hFind = INVALID_HANDLE_VALUE;
+			WIN32_FIND_DATA ffd;
+			LARGE_INTEGER filesize;
+			SYSTEMTIME creationTime;
+			char dateStr[32];
+			char timeStr[32];
+
+			strcpy(loadPath + strlen(args->cd), "data/*");
+			hFind = FindFirstFile(loadPath, &ffd);
+			if (hFind != INVALID_HANDLE_VALUE)
+			{
+				do
+				{
+					ptr = ffd.cFileName;
+					if (findNextToken(&ptr, fmuName)) continue;
+					if (findNextToken(&ptr, token)) continue;
+					if (!strcmp(token, "mat"))
+					{
+						sprintf(fmuName, "%s.%s", fmuName, token);
+						sprintf(str, "data/%s", fmuName);
+						filesize.LowPart = ffd.nFileSizeLow;
+						filesize.HighPart = ffd.nFileSizeHigh;
+						FileTimeToSystemTime(&ffd.ftCreationTime, &creationTime);
+						GetDateFormat(LOCALE_CUSTOM_DEFAULT, 0, &creationTime, NULL, dateStr, 32);
+						GetTimeFormat(LOCALE_CUSTOM_DEFAULT, 0, &creationTime, NULL, timeStr, 32);
+						sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s' download='%s'>%s</a></td><td>%llu</td><td>%s %s</td></tr>", fmuName, fmuName, fmuName, filesize.QuadPart, dateStr, timeStr);
+					}
+				} while (FindNextFile(hFind, &ffd) != 0);
+
+				FindClose(hFind);
 			}
 			else
 				PRINT("Couldn't open the directory!\n");
@@ -643,31 +679,17 @@ void *connectionThread(void *argin)
 				findNextToken(&ptr, linkModelParam);
 			}
 			strcpy(loadPath + strlen(args->cd), str);
+			readFile(loadPath, &databuflen, &databuf, "rb");
 			if (strstr(str, "xml"))
-			{
-				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "no-store", databuflen, "text/xml");
-			}
 			else if (strstr(str, "txt"))
-			{
-				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "no-store", databuflen, "text/plain");
-			}
 			else if (strstr(str, "svg"))
-			{
-				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "max-age=3600", databuflen, "image/svg+xml");
-			}
 			else if (strstr(str, "bin") || strstr(str, "mat"))
-			{
-				readFile(loadPath, &databuflen, &databuf, "rb");
 				sprintf(header, http_protocol, "no-store", databuflen, "application/octet-stream");
-			}
 			else
-			{
-				readFile(loadPath, &databuflen, &databuf, "r");
 				sprintf(header, http_protocol, "no-store", databuflen, "text/html");
-			}
 		}
 		else if (strstr(recvbuf, "POST /sim"))
 		{
@@ -820,7 +842,7 @@ void *connectionThread(void *argin)
 		free(databuf);
 		if (!args->persistentConnection) quitConnection = TRUE;
 	}
-    CLOSESOCKET(args->serverSocket)
+	CLOSESOCKET(args->serverSocket)
 	PRINT("Thread %d closed. ID = %d\n", args->threadIndex, (int)args->threadID[args->threadIndex]);
 	args->threadID[args->threadIndex] = -1;
 
@@ -921,7 +943,7 @@ int main(int argc, char *argv[])
 	if (bind(acceptSocket, (struct sockaddr*)&addr, sizeof(addr)) < 0)
 	{
 		PRINT("Bind failed!\n");
-        CLOSESOCKET(acceptSocket)
+		CLOSESOCKET(acceptSocket)
 		return 1;
 	}
 	PRINT("Bind Socket with Port: %d\n", port);
@@ -929,7 +951,7 @@ int main(int argc, char *argv[])
 	if (listen(acceptSocket, MAX_THREAD_COUNT)<0)
 	{
 		PRINT("Listen failed!\n");
-        CLOSESOCKET(acceptSocket)
+		CLOSESOCKET(acceptSocket)
 		return 1;
 	}
 
@@ -942,7 +964,7 @@ int main(int argc, char *argv[])
 		if (serverSocket<0)
 		{
 			PRINT("Connection failed!\n");
-            CLOSESOCKET(acceptSocket)
+			CLOSESOCKET(acceptSocket)
 			return 1;
 		}
 		str_client_ip = inet_ntoa(client_addr.sin_addr);
@@ -984,14 +1006,13 @@ int main(int argc, char *argv[])
 		if (status != 0)
 		{
 			PRINT("No Threads availlable!\n");
-            CLOSESOCKET(serverSocket)
+			CLOSESOCKET(serverSocket)
 		}
 		for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++) PRINT("%d   ", (int)threadID[threadIndex]);
 		PRINT("\n");
 		status = 1;
 	}
-
-    CLOSESOCKET(acceptSocket)
+	CLOSESOCKET(acceptSocket)
 
 	return 0;
 }

@@ -6,3 +6,4 @@ webfmuserver
 *.o
 *.obj
 *.exe
+*.exp
