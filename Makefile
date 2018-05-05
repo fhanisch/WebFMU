@@ -2,7 +2,7 @@ gcc: mat_gcc spacestation_gcc webfmuserver_gcc install_raspi
 msvc: mat_msvc spacestation_msvc webfmuserver_msvc
 
 mat_gcc: matIO/matio.c
-	gcc -c -D LIB -o matio.o matIO/matio.c
+	gcc -c -Wall -D LIB -o matio.o matIO/matio.c
 	ar cr libmatio.a matio.o
 
 mat_msvc: matIO/matio.c

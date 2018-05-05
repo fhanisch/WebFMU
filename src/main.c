@@ -626,7 +626,7 @@ void *connectionThread(void *argin)
 			HANDLE hFind = INVALID_HANDLE_VALUE;
 			WIN32_FIND_DATA ffd;
 			LARGE_INTEGER filesize;
-			SYSTEMTIME creationTime;
+			SYSTEMTIME creationTime, localTime;
 			char dateStr[32];
 			char timeStr[32];
 
@@ -645,9 +645,10 @@ void *connectionThread(void *argin)
 						sprintf(str, "data/%s", fmuName);
 						filesize.LowPart = ffd.nFileSizeLow;
 						filesize.HighPart = ffd.nFileSizeHigh;
-						FileTimeToSystemTime(&ffd.ftCreationTime, &creationTime);
-						GetDateFormat(LOCALE_CUSTOM_DEFAULT, 0, &creationTime, NULL, dateStr, 32);
-						GetTimeFormat(LOCALE_CUSTOM_DEFAULT, 0, &creationTime, NULL, timeStr, 32);
+						FileTimeToSystemTime(&ffd.ftLastWriteTime, &creationTime);
+						SystemTimeToTzSpecificLocalTime(NULL, &creationTime, &localTime);
+						GetDateFormat(MAKELCID(MAKELANGID(LANG_GERMAN, SUBLANG_GERMAN), SORT_DEFAULT), 0, &localTime, NULL, dateStr, 32);
+						GetTimeFormat(MAKELCID(MAKELANGID(LANG_GERMAN, SUBLANG_GERMAN), SORT_DEFAULT), 0, &localTime, NULL, timeStr, 32);
 						sprintf(databuf + strlen(databuf), "<tr><td><a href='load?/data/%s' download='%s'>%s</a></td><td>%llu</td><td>%s %s</td></tr>", fmuName, fmuName, fmuName, filesize.QuadPart, dateStr, timeStr);
 					}
 				} while (FindNextFile(hFind, &ffd) != 0);
@@ -798,7 +799,7 @@ void *connectionThread(void *argin)
 					//fmi2Terminate(fmuInstance);
 					//fmi2Reset(fmuInstance);
 					fmu.fmi2FreeInstance(fmu.fmuInstance);
-                    FREELIBRARY(fmu.handle)
+					FREELIBRARY(fmu.handle)
 				}
 				else
 				{
@@ -922,14 +923,14 @@ int main(int argc, char *argv[])
 	}
 
 #ifdef WINDOWS
-    WSADATA wsaData;
+	WSADATA wsaData;
 
-    // Initialize Winsock
-    int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != 0) {
-        PRINT("WSAStartup failed: %d\n", iResult);
-        return 1;
-    }
+	// Initialize Winsock
+	int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (iResult != 0) {
+		PRINT("WSAStartup failed: %d\n", iResult);
+		return 1;
+	}
 #endif
 
 	acceptSocket = (int)socket(AF_INET, SOCK_STREAM, 0);
@@ -991,15 +992,15 @@ int main(int argc, char *argv[])
 					threadID[threadIndex] = -1;
 				}
 #else
-                HANDLE threadHandle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)connectionThread, &args[threadIndex], 0, &threadID[threadIndex]);
-                if (threadHandle == NULL)
-                {
-                    PRINT("Thread creation failed!\n");
-                    threadID[threadIndex] = -1;
-                    status = 1;
-                }
-                else
-                    status = 0;
+				HANDLE threadHandle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)connectionThread, &args[threadIndex], 0, &threadID[threadIndex]);
+				if (threadHandle == NULL)
+				{
+					PRINT("Thread creation failed!\n");
+					threadID[threadIndex] = -1;
+					status = 1;
+				}
+				else
+					status = 0;
 #endif
 				break;
 			}
