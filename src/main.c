@@ -434,7 +434,7 @@ void *connectionThread(void *argin)
 	char resultFileName[64];
 	char resultFullFilePath[256];
 	fmi2String instanceName = "WebFMU";
-	fmi2String guid = "{8c4e810f-3df3-4a00-8276-176fa3c9f9e0}";
+	fmi2String guid = malloc(128);
 	fmi2String fmuResourcesLocation = NULL;
 	fmi2Real tstop = 1.0;
 	fmi2Real tOutStep = 0.1;
@@ -731,6 +731,11 @@ void *connectionThread(void *argin)
 					{
 						findNextToken(&ptr, token);
 						sprintf(resultFileName, "%s%s", token, ".mat");
+					}
+					else if (!strcmp(token, "guid"))
+					{
+						findNextTokenLimited(&ptr, token, '&');
+						strcpy((char*)guid, token);
 					}
 					else if (!strcmp(token, "tstop"))
 					{

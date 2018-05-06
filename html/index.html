@@ -41,6 +41,7 @@
 
     <script>
       var fmuName; //globale Variable
+      var guid;
 
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {
@@ -114,6 +115,7 @@
         xmlDoc = xml.responseXML;
         var fmiModelDescription = xmlDoc.getElementsByTagName("fmiModelDescription");
         var modelName = fmiModelDescription[0].attributes.getNamedItem("modelName").nodeValue;
+        guid = fmiModelDescription[0].attributes.getNamedItem("guid").nodeValue;
         var coSimulationAttributs = xmlDoc.getElementsByTagName("CoSimulation");
         fmuName = coSimulationAttributs[0].attributes.getNamedItem("modelIdentifier").nodeValue;
         document.getElementById("modelName").innerHTML = modelName + " - FMU";
@@ -166,6 +168,9 @@
         parameterlist+="&";
         parameterlist+="fmuname=";
         parameterlist+=fmuName;
+        parameterlist+="&";
+        parameterlist+="guid=";
+        parameterlist+=guid;
         parameterlist+="&";
         var tstop = document.getElementById("tstop");
         parameterlist+="tstop=";
