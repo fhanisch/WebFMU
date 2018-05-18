@@ -29,34 +29,34 @@
 #include "../matIO/matio.h"
 
 #ifndef WINDOWS
-    #include <sys/socket.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-    #include <dlfcn.h>
-    #include <dirent.h>
-    #include <sys/stat.h>
-    #include <pthread.h>
+	#include <sys/socket.h>
+	#include <arpa/inet.h>
+	#include <unistd.h>
+	#include <dlfcn.h>
+	#include <dirent.h>
+	#include <sys/stat.h>
+	#include <pthread.h>
 
-    #define LOADLIBRARY(libname) dlopen(libname, RTLD_LAZY);
-    #define FREELIBRARY(handle) dlclose(handle);
-    #define GETFCNPTR dlsym
-    #define CLOSESOCKET(sock) close(sock);
+	#define LOADLIBRARY(libname) dlopen(libname, RTLD_LAZY);
+	#define FREELIBRARY(handle) dlclose(handle);
+	#define GETFCNPTR dlsym
+	#define CLOSESOCKET(sock) close(sock);
 	#define EXT ".so"
 
-    typedef void* HANDLE;
+	typedef void* HANDLE;
 #else
-    #include <stdint.h>
-    #include <windows.h>
-    #include <winsock2.h>
-    #include <ws2tcpip.h>
+	#include <stdint.h>
+	#include <windows.h>
+	#include <winsock2.h>
+	#include <ws2tcpip.h>
 
-    #define LOADLIBRARY(libname) LoadLibrary(libname);
-    #define FREELIBRARY(handle) FreeLibrary(handle);
-    #define GETFCNPTR GetProcAddress
-    #define CLOSESOCKET(sock) closesocket(sock);
+	#define LOADLIBRARY(libname) LoadLibrary(libname);
+	#define FREELIBRARY(handle) FreeLibrary(handle);
+	#define GETFCNPTR GetProcAddress
+	#define CLOSESOCKET(sock) closesocket(sock);
 	#define EXT ".dll"
 
-    typedef DWORD pthread_t;
+	typedef DWORD pthread_t;
 #endif // !WINDOWS
 
 #define FALSE 0
