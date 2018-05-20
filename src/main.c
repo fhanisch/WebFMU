@@ -43,6 +43,7 @@
 	#define GETFCNPTR dlsym
 	#define CLOSESOCKET(sock) close(sock);
 	#define EXT ".so"
+	#define DELIMITER "/"
 
 	typedef void* HANDLE;
 #else
@@ -56,16 +57,20 @@
 	#define GETFCNPTR GetProcAddress
 	#define CLOSESOCKET(sock) closesocket(sock);
 	#define EXT ".dll"
+	#define DELIMITER "\\"
 
 	typedef DWORD pthread_t;
 #endif // !WINDOWS
 
-#define ANDROID
 #ifdef ANDROID
 	#include "android_native_app_glue.h"
 	#define MAIN void android_main(struct android_app *state)
+	#define RETURN(c) return;
+	#define DATAPATH "/sdcard/WebFmu/"
 #else
 	#define MAIN int main(int argc, char *argv[])
+	#define RETURN(c) return c;
+	#define DATAPATH argv[0]
 #endif // ANDROID
 
 
@@ -876,8 +881,7 @@ MAIN
 	char *str_client_ip;
 	int port = 80;
 	bool quitServer = FALSE;
-	int i;
-	char *cd;
+	char *cd = DATAPATH;
 	char *ptr;
 	char loadPath[256];
 	ThreadArguments args[MAX_THREAD_COUNT];
@@ -885,10 +889,9 @@ MAIN
 	unsigned int threadIndex=0;
 	int status = 1;
 
-	cd = argv[0];
 	ptr = cd;
 	char *tmp = ptr;
-	while (getNextDelimiter(&ptr, "/")) { tmp = ptr; }
+	while (getNextDelimiter(&ptr, DELIMITER)) { tmp = ptr; }
 	*tmp = 0;
 	strcpy(loadPath, cd);
 	strcpy(loadPath + strlen(cd), "log.txt");
@@ -904,7 +907,7 @@ MAIN
 	PRINT("Web FMU Server\n\n")
 
 #ifndef ANDROID
-	for (i = 1; i < argc; i++)
+	for (int i = 1; i < argc; i++)
 	{
 		if (!strcmp(argv[i], "-c"))
 		{
@@ -929,12 +932,12 @@ MAIN
 			printf("\t-c\t\tset connection type = closed\n");
 			printf("\t-p\t\tset connection type = persistent\n");
 			printf("\t-port\t\tset port\n");
-			exit(1);
+			RETURN(1)
 		}
 		else
 		{
 			printf("Unknown command!\n");
-			exit(1);
+			RETURN(1)
 		}
 	}
 #endif
@@ -946,7 +949,7 @@ MAIN
 	int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != 0) {
 		PRINT("WSAStartup failed: %d\n", iResult);
-		return 1;
+		RETURN(1)
 	}
 #endif
 
@@ -954,7 +957,7 @@ MAIN
 	if (acceptSocket<0)
 	{
 		PRINT("Failed to acceptSocket!\n");
-		return 1;
+		RETURN(1)
 	}
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
@@ -963,7 +966,7 @@ MAIN
 	{
 		PRINT("Bind failed!\n");
 		CLOSESOCKET(acceptSocket)
-		return 1;
+		RETURN(1)
 	}
 	PRINT("Bind Socket with Port: %d\n", port);
 
@@ -971,7 +974,7 @@ MAIN
 	{
 		PRINT("Listen failed!\n");
 		CLOSESOCKET(acceptSocket)
-		return 1;
+		RETURN(1)
 	}
 
 	PRINT("Server started ...\n");
@@ -984,7 +987,7 @@ MAIN
 		{
 			PRINT("Connection failed!\n");
 			CLOSESOCKET(acceptSocket)
-			return 1;
+			RETURN(1)
 		}
 		str_client_ip = inet_ntoa(client_addr.sin_addr);
 		PRINT("Connection accepted.\n");
@@ -1033,5 +1036,5 @@ MAIN
 	}
 	CLOSESOCKET(acceptSocket)
 
-	return 0;
+	RETURN(0)
 }

@@ -22,7 +22,7 @@ webfmuserver_gcc: src/main.c libmatio.a
 	gcc -std=c11 -Wall -o webfmuserver src/main.c -L . -ldl -lmatio -pthread
 
 webfmuserver_android: src/main.c libmatio.a
-	$(CLANG) -shared --sysroot=$(SYSROOT) -std=c11 -Wall -o webfmuserver.so src/main.c src/android_native_app_glue.c -L . -ldl -lmatio -llog -landroid -pthread
+	$(CLANG) -shared --sysroot=$(SYSROOT) -std=c11 -Wall -D ANDROID -o webfmuserver.so src/main.c src/android_native_app_glue.c -L . -ldl -lmatio -llog -landroid -pthread
 
 webfmuserver_msvc: src/main.c matio.lib
 	cl /nologo /W3 /D WINDOWS src/main.c /link Ws2_32.lib matio.lib /out:webfmuserver.exe

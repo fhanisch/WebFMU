@@ -1,5 +1,6 @@
 data
 webfmuserver
+webfmuserver.so
 *.txt
 *.a
 *.lib
