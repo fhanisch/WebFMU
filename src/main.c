@@ -64,11 +64,9 @@
 
 #ifdef ANDROID
 	#include "android_native_app_glue.h"
-	#define MAIN void android_main(struct android_app *state)
 	#define RETURN(c) return;
 	#define DATAPATH "/sdcard/WebFmu/"
 #else
-	#define MAIN int main(int argc, char *argv[])
 	#define RETURN(c) return c;
 	#define DATAPATH argv[0]
 #endif // ANDROID
@@ -871,7 +869,11 @@ void *connectionThread(void *argin)
 	return NULL;
 }
 
-MAIN
+#ifdef ANDROID
+	void android_main(struct android_app *state)
+#else
+	int main(int argc, char *argv[])
+#endif
 {
 	int acceptSocket, serverSocket;
 	bool persistentConnection = TRUE;
