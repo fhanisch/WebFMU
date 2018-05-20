@@ -11,7 +11,6 @@
 
 	ToDo:
 		- Log Handling
-		- Android Portierung 
 		- _WINSOCK_DEPRECATED_NO_WARNINGS entfernen
 */
 
@@ -78,18 +77,24 @@
 
 #ifdef LOG
 
-	#define PRINT(...)                                      \
-				logfile = fopen(logfilepath, "a");          \
-				sprintf(logbuf, __VA_ARGS__);               \
-				fwrite(logbuf, 1, strlen(logbuf), logfile); \
-				fclose(logfile);
+	#define LOGINFO "Start Logging ..."
+	#define PRINT(...)                                          \
+				logfile = fopen(logfilepath, "a");              \
+				if (logfile)                                    \
+				{                                               \
+					sprintf(logbuf, __VA_ARGS__);               \
+					fwrite(logbuf, 1, strlen(logbuf), logfile); \
+					fclose(logfile);                            \
+				}
 
 #elif defined NOLOG
 
+	#define LOGINFO "Logging disabled!"
 	#define PRINT(...)
 
 #else
 
+	#define LOGINFO "Logging disabled!"
 	#define PRINT(...) printf(__VA_ARGS__);
 
 #endif
@@ -142,12 +147,12 @@ typedef struct{
 } ThreadArguments;
 
 char header[512];
-const char http_protocol[] =    "HTTP/1.1 200 OK\r\n"
-                                "Server: WebFMU Server\r\n"
-                                "Keep-Alive: timeout=20, max=50\r\n"
-                                "Cache-Control: %s\r\n"
-                                "Content-Length: %d\r\n"
-                                "Content-Type: %s\r\n\r\n";
+const char http_protocol[] =	"HTTP/1.1 200 OK\r\n"
+								"Server: WebFMU Server\r\n"
+								"Keep-Alive: timeout=20, max=50\r\n"
+								"Cache-Control: %s\r\n"
+								"Content-Length: %d\r\n"
+								"Content-Type: %s\r\n\r\n";
 
 static FILE *logfile;
 char logbuf[1024];
@@ -902,7 +907,11 @@ void *connectionThread(void *argin)
 	strcpy(loadPath + strlen(cd), "log.txt");
 	strcpy(logfilepath, loadPath);
 	logfile = fopen(logfilepath, "w");
-	fclose(logfile);
+	if (logfile)
+	{
+		fwrite(LOGINFO, 1, strlen(LOGINFO), logfile);
+		fclose(logfile);
+	}
 	PRINT("%s\n\n", loadPath)
 	memset(threadID, -1, MAX_THREAD_COUNT*sizeof(int));
 	//threadID[0] = -1;

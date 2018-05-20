@@ -30,6 +30,9 @@ webfmuserver_msvc: src/main.c matio.lib
 spacestation_gcc: src/space_station.c
 	gcc -std=c11 -shared -Wall -o fmu/space_station_fmu.so src/space_station.c -lm
 
+spacestation_android: src/space_station.c
+	$(CLANG) -std=c11 -shared -Wall -o fmu/space_station_fmu.so src/space_station.c -lm
+
 spacestation_msvc: src/space_station.c
 	cl /nologo /W3 /D WINDOWS src/space_station.c /link /DLL /out:fmu/space_station_fmu.dll
 
