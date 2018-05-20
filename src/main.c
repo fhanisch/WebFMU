@@ -60,7 +60,9 @@
 	typedef DWORD pthread_t;
 #endif // !WINDOWS
 
+#define ANDROID
 #ifdef ANDROID
+	#include "android_native_app_glue.h"
 	#define MAIN void android_main(struct android_app *state)
 #else
 	#define MAIN int main(int argc, char *argv[])
@@ -74,11 +76,11 @@
 
 #ifdef LOG
 
-    #define PRINT(...)                                      \
-                logfile = fopen(logfilepath, "a");          \
-                sprintf(logbuf, __VA_ARGS__);               \
-                fwrite(logbuf, 1, strlen(logbuf), logfile); \
-                fclose(logfile);
+	#define PRINT(...)                                      \
+				logfile = fopen(logfilepath, "a");          \
+				sprintf(logbuf, __VA_ARGS__);               \
+				fwrite(logbuf, 1, strlen(logbuf), logfile); \
+				fclose(logfile);
 
 #elif defined NOLOG
 
@@ -91,12 +93,12 @@
 #endif
 
 #define FMI_GET_FUNC_ADDR( fun )                                        \
-                fmu->fun = (fun##TYPE*)GETFCNPTR(fmu->handle, #fun);    \
-                if (fmu->fun == NULL)                                   \
-                {                                                       \
-                    PRINT("Load %s failed!\n",#fun);                    \
-                    return -1;                                          \
-                }
+				fmu->fun = (fun##TYPE*)GETFCNPTR(fmu->handle, #fun);    \
+				if (fmu->fun == NULL)                                   \
+				{                                                       \
+					PRINT("Load %s failed!\n",#fun);                    \
+					return -1;                                          \
+				}
 
 typedef int bool;
 
@@ -901,6 +903,7 @@ MAIN
 
 	PRINT("Web FMU Server\n\n")
 
+#ifndef ANDROID
 	for (i = 1; i < argc; i++)
 	{
 		if (!strcmp(argv[i], "-c"))
@@ -934,6 +937,7 @@ MAIN
 			exit(1);
 		}
 	}
+#endif
 
 #ifdef WINDOWS
 	WSADATA wsaData;
@@ -1023,7 +1027,7 @@ MAIN
 			PRINT("No Threads availlable!\n");
 			CLOSESOCKET(serverSocket)
 		}
-		for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++) PRINT("%d   ", (int)threadID[threadIndex]);
+		for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++) { PRINT("%d\t", (int)threadID[threadIndex]) }
 		PRINT("\n");
 		status = 1;
 	}
