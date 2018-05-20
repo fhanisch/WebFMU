@@ -68,7 +68,6 @@
 	#define DATAPATH "/sdcard/WebFmu/"
 #else
 	#define RETURN(c) return c;
-	#define DATAPATH argv[0]
 #endif // ANDROID
 
 
@@ -881,20 +880,24 @@ void *connectionThread(void *argin)
 	struct sockaddr_in client_addr;
 	socklen_t addrlen;
 	char *str_client_ip;
-	int port = 80;
+	int port = 3000;
 	bool quitServer = FALSE;
-	char *cd = DATAPATH;
-	char *ptr;
 	char loadPath[256];
 	ThreadArguments args[MAX_THREAD_COUNT];
 	pthread_t threadID[MAX_THREAD_COUNT];
 	unsigned int threadIndex=0;
 	int status = 1;
 
+#ifdef ANDROID
+	char cd[] = DATAPATH;
+#else
+	char *ptr;
+	char *cd = argv[0];
 	ptr = cd;
 	char *tmp = ptr;
 	while (getNextDelimiter(&ptr, DELIMITER)) { tmp = ptr; }
 	*tmp = 0;
+#endif
 	strcpy(loadPath, cd);
 	strcpy(loadPath + strlen(cd), "log.txt");
 	strcpy(logfilepath, loadPath);
