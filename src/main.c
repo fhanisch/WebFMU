@@ -11,6 +11,7 @@
 
 	ToDo:
 		- Log Handling
+		- Android Portierung 
 		- _WINSOCK_DEPRECATED_NO_WARNINGS entfernen
 */
 
@@ -58,6 +59,13 @@
 
 	typedef DWORD pthread_t;
 #endif // !WINDOWS
+
+#ifdef ANDROID
+	#define MAIN void android_main(struct android_app *state)
+#else
+	#define MAIN int main(int argc, char *argv[])
+#endif // ANDROID
+
 
 #define FALSE 0
 #define TRUE 1
@@ -856,7 +864,7 @@ void *connectionThread(void *argin)
 	return NULL;
 }
 
-int main(int argc, char *argv[])
+MAIN
 {
 	int acceptSocket, serverSocket;
 	bool persistentConnection = TRUE;
@@ -873,7 +881,7 @@ int main(int argc, char *argv[])
 	ThreadArguments args[MAX_THREAD_COUNT];
 	pthread_t threadID[MAX_THREAD_COUNT];
 	unsigned int threadIndex=0;
-    int status = 1;
+	int status = 1;
 
 	cd = argv[0];
 	ptr = cd;
@@ -885,13 +893,13 @@ int main(int argc, char *argv[])
 	strcpy(logfilepath, loadPath);
 	logfile = fopen(logfilepath, "w");
 	fclose(logfile);
-	PRINT("%s\n\n", loadPath);
+	PRINT("%s\n\n", loadPath)
 	memset(threadID, -1, MAX_THREAD_COUNT*sizeof(int));
 	//threadID[0] = -1;
-	for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++) PRINT("%d   ", (int)threadID[threadIndex]);
-	PRINT("\n");
+	for (threadIndex = 0; threadIndex < MAX_THREAD_COUNT; threadIndex++) { PRINT("%d\t", (int)threadID[threadIndex]) }
+	PRINT("\n")
 
-	PRINT("Web FMU Server\n\n");
+	PRINT("Web FMU Server\n\n")
 
 	for (i = 1; i < argc; i++)
 	{
