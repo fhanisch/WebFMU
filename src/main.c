@@ -69,7 +69,6 @@
 	#define RETURN(c) return c;
 #endif // ANDROID
 
-
 #define FALSE 0
 #define TRUE 1
 #define MAX_THREAD_COUNT 10
@@ -79,13 +78,16 @@
 
 	#define LOGINFO "Start Logging ...\n"
 	#define PRINT(...)                                          \
+				while(!isFileWriteAccess) {}                    \
+				isFileWriteAccess = FALSE;                      \
 				logfile = fopen(logfilepath, "a");              \
 				if (logfile)                                    \
 				{                                               \
 					sprintf(logbuf, __VA_ARGS__);               \
 					fwrite(logbuf, 1, strlen(logbuf), logfile); \
 					fclose(logfile);                            \
-				}
+				}                                               \
+				isFileWriteAccess = TRUE;
 
 #elif defined NOLOG
 
@@ -156,6 +158,7 @@ const char http_protocol[] =	"HTTP/1.1 200 OK\r\n"
 
 static FILE *logfile;
 char logbuf[1024];
+bool isFileWriteAccess = TRUE;
 char logfilepath[256];
 
 char getNextDelimiter(char **src, char *delimiter)
