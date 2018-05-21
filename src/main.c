@@ -77,7 +77,7 @@
 
 #ifdef LOG
 
-	#define LOGINFO "Start Logging ..."
+	#define LOGINFO "Start Logging ...\n"
 	#define PRINT(...)                                          \
 				logfile = fopen(logfilepath, "a");              \
 				if (logfile)                                    \
@@ -89,12 +89,12 @@
 
 #elif defined NOLOG
 
-	#define LOGINFO "Logging disabled!"
+	#define LOGINFO "Logging disabled!\n"
 	#define PRINT(...)
 
 #else
 
-	#define LOGINFO "Logging disabled!"
+	#define LOGINFO "Logging disabled!\n"
 	#define PRINT(...) printf(__VA_ARGS__);
 
 #endif
