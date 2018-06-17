@@ -6,8 +6,11 @@
 	compile: gcc -std=c11 -Wall -o webfmuserver src/main.c -L . -ldl -lmatio -pthread
 	Wichtig: Cache-Control im Header beachten !!! --> Wann müssen welche Seiten aktualisiert werden?
 
-	readFile(loadPath, &databuflen, &databuf, "rb"); --> Lesemodus sollte Binärmodus sein, da unter Windows
-	im Textmodus ggf. die Zeilenenden angepasst werden
+	!!! Achtung !!!
+		- readFile(loadPath, &databuflen, &databuf, "rb"); --> Lesemodus sollte Binärmodus sein, da unter Windows
+		  im Textmodus ggf. die Zeilenenden angepasst werden
+		- Speichergröße von <size_t> beachten!
+		- Der allokierte Speicher in der Funktion 'allocateMemory' muss mit 0 initialisiert werden! --> 'calloc' verwenden
 
 	ToDo:
 		- Log Handling
@@ -225,12 +228,13 @@ int findNextToken(char **src, char *token)
 	return 0;
 }
 
+// Achtung !!! --> Der allokierte Speicher in der Funktion 'allocateMemory' muss mit 0 initialisiert werden !!!
 void *allocateMemory(size_t nobj, size_t size)
 {
-	return malloc(nobj*size);
+	return calloc(nobj, size); // --> Initialisierung des Speichers mit 0 notwendig !!! --> deshalb 'calloc'
 }
 
-void freeMemory(void* obj)
+void freeMemory(void *obj)
 {
 	free(obj);
 }
