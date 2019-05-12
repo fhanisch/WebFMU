@@ -1000,6 +1000,7 @@ void *connectionThread(void *argin)
 
 	PRINT("Server started ...\n");
 
+	addrlen = sizeof(client_addr);
 	while (!quitServer)
 	{
 		PRINT("Wait for connection...\n\n");
